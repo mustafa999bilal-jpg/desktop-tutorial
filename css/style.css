@@ -258,6 +258,15 @@ ul { list-style: none; }
 
 .field { display: flex; flex-direction: column; gap: 8px; }
 
+.field-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: -8px 0 18px;
+  line-height: 1.6;
+}
+
+.balloon-row span:last-child { color: var(--gold-light); }
+
 .field label {
   font-size: 0.9rem;
   color: var(--text-muted);

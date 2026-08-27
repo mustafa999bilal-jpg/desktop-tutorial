@@ -53,19 +53,27 @@ const calcResult = document.getElementById("calcResult");
 // نسبة الالتزامات القصوى المسموح بها من الراتب (قاعدة شائعة لدى جهات التمويل)
 const MAX_DEBT_BURDEN_RATIO = 0.65;
 
-function computeInstallment(principal, annualRatePercent, months) {
+// balloonPayment: مبلغ الدفعة الختامية (0 لو مفيش دفعة ختامية)
+function computeInstallment(principal, annualRatePercent, months, balloonPayment = 0) {
   const monthlyRate = annualRatePercent / 100 / 12;
-  if (monthlyRate === 0) return principal / months;
+  if (monthlyRate === 0) return (principal - balloonPayment) / months;
   const factor = Math.pow(1 + monthlyRate, months);
-  return (principal * monthlyRate * factor) / (factor - 1);
+  return (monthlyRate * (principal * factor - balloonPayment)) / (factor - 1);
 }
 
-function computeMaxLoan(maxInstallment, annualRatePercent, months) {
+// الحد الأقصى لسعر السيارة اللي يقدر راتب العميل يستحمله، مع الأخذ في الاعتبار الدفعة المقدمة والدفعة الختامية
+function computeMaxCarPrice(maxInstallment, annualRatePercent, months, downPayment, balloonRatio) {
   const monthlyRate = annualRatePercent / 100 / 12;
-  if (maxInstallment <= 0) return 0;
-  if (monthlyRate === 0) return maxInstallment * months;
+  if (maxInstallment <= 0) return downPayment;
+
+  if (monthlyRate === 0) {
+    return (maxInstallment * months + downPayment) / (1 - balloonRatio);
+  }
+
   const factor = Math.pow(1 + monthlyRate, months);
-  return (maxInstallment * (factor - 1)) / (monthlyRate * factor);
+  return (
+    (maxInstallment * (factor - 1)) / monthlyRate + downPayment * factor
+  ) / (factor - balloonRatio);
 }
 
 calcForm.addEventListener("submit", (e) => {
@@ -77,6 +85,7 @@ calcForm.addEventListener("submit", (e) => {
   const obligations = parseFloat(document.getElementById("obligations").value) || 0;
   const months = parseInt(document.getElementById("months").value, 10);
   const rate = parseFloat(document.getElementById("rate").value) || 0;
+  const balloonPercent = Math.min(Math.max(parseFloat(document.getElementById("balloon").value) || 0, 0), 99);
 
   if (carPrice <= 0 || salary <= 0) {
     calcResult.innerHTML = `
@@ -98,16 +107,22 @@ calcForm.addEventListener("submit", (e) => {
     return;
   }
 
-  const monthlyInstallment = computeInstallment(financedAmount, rate, months);
-  const totalPayment = monthlyInstallment * months;
+  const balloonRatio = balloonPercent / 100;
+  const balloonPayment = carPrice * balloonRatio;
+
+  const monthlyInstallment = computeInstallment(financedAmount, rate, months, balloonPayment);
+  const totalPayment = monthlyInstallment * months + balloonPayment;
   const totalProfit = totalPayment - financedAmount;
 
   const maxAllowedInstallment = Math.max(salary * MAX_DEBT_BURDEN_RATIO - obligations, 0);
   const debtBurdenRatio = ((monthlyInstallment + obligations) / salary) * 100;
   const isEligible = monthlyInstallment <= maxAllowedInstallment;
 
-  const maxLoanBySalary = computeMaxLoan(maxAllowedInstallment, rate, months);
-  const maxCarPriceBySalary = maxLoanBySalary + downPayment;
+  const maxCarPriceBySalary = computeMaxCarPrice(maxAllowedInstallment, rate, months, downPayment, balloonRatio);
+
+  const balloonRow = balloonPayment > 0
+    ? `<div class="result-row balloon-row"><span>الدفعة الختامية المستحقة بعد ${months} شهر</span><span>${formatCurrency(balloonPayment)}</span></div>`
+    : "";
 
   calcResult.innerHTML = `
     <div class="result-content">
@@ -118,10 +133,11 @@ calcForm.addEventListener("submit", (e) => {
 
       <div class="result-list">
         <div class="result-row"><span>مبلغ التمويل</span><span>${formatCurrency(financedAmount)}</span></div>
-        <div class="result-row"><span>إجمالي المبلغ المسدد (${months} شهر)</span><span>${formatCurrency(totalPayment)}</span></div>
+        ${balloonRow}
+        <div class="result-row"><span>إجمالي المبلغ المسدد (أقساط + دفعة ختامية)</span><span>${formatCurrency(totalPayment)}</span></div>
         <div class="result-row"><span>إجمالي الربح/التكلفة الإضافية</span><span>${formatCurrency(totalProfit)}</span></div>
         <div class="result-row"><span>نسبة الالتزامات من الراتب</span><span>${debtBurdenRatio.toFixed(1)}%</span></div>
-        <div class="result-row"><span>أقصى سعر سيارة يناسب راتبك (بنفس المدة والدفعة)</span><span>${formatCurrency(Math.max(maxCarPriceBySalary, 0))}</span></div>
+        <div class="result-row"><span>أقصى سعر سيارة يناسب راتبك (بنفس المدة والدفعة والدفعة الختامية)</span><span>${formatCurrency(Math.max(maxCarPriceBySalary, 0))}</span></div>
       </div>
 
       <div class="eligibility ${isEligible ? "ok" : "warn"}">
