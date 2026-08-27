@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>معرض رواد الاعتماد للسيارات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="navbar">
+  <div class="container navbar-inner">
+    <div class="logo">
+      <span class="logo-icon">🚗</span>
+      <span class="logo-text">معرض رواد الاعتماد</span>
+    </div>
+    <nav class="nav-links" id="navLinks">
+      <a href="#home">الرئيسية</a>
+      <a href="#cars">سياراتنا</a>
+      <a href="#calculator">حاسبة التمويل</a>
+      <a href="#contact">تواصل معنا</a>
+    </nav>
+    <button class="menu-toggle" id="menuToggle" aria-label="القائمة">☰</button>
+  </div>
+</header>
+
+<section id="home" class="hero">
+  <div class="container hero-inner">
+    <h1>معرض رواد الاعتماد للسيارات</h1>
+    <p>وجهتك الأولى لاقتناء سيارتك المفضلة بأفضل الأسعار، مع خيارات تمويل مرنة تناسب راتبك</p>
+    <div class="hero-actions">
+      <a href="#calculator" class="btn btn-primary">احسب قسطك الشهري</a>
+      <a href="#cars" class="btn btn-outline">تصفح السيارات</a>
+    </div>
+  </div>
+</section>
+
+<section id="cars" class="section">
+  <div class="container">
+    <h2 class="section-title">سياراتنا المتوفرة</h2>
+    <p class="section-sub">مجموعة مختارة من أحدث الموديلات — اضغط "احسب القسط" لتقدير التمويل مباشرة</p>
+
+    <div class="cars-grid" id="carsGrid">
+      <!-- Car cards injected by JS -->
+    </div>
+  </div>
+</section>
+
+<section id="calculator" class="section calc-section">
+  <div class="container">
+    <h2 class="section-title">حاسبة التمويل</h2>
+    <p class="section-sub">أدخل بياناتك لمعرفة القسط الشهري التقريبي وقدرتك التمويلية</p>
+
+    <div class="calc-wrapper">
+      <form class="calc-form" id="calcForm">
+        <div class="form-grid">
+          <div class="field">
+            <label for="carPrice">سعر السيارة (ر.س)</label>
+            <input type="number" id="carPrice" min="0" step="500" placeholder="مثال: 90000" required>
+          </div>
+
+          <div class="field">
+            <label for="downPayment">الدفعة المقدمة (ر.س)</label>
+            <input type="number" id="downPayment" min="0" step="500" placeholder="مثال: 10000" value="0">
+          </div>
+
+          <div class="field">
+            <label for="salary">الراتب الشهري (ر.س)</label>
+            <input type="number" id="salary" min="0" step="100" placeholder="مثال: 8000" required>
+          </div>
+
+          <div class="field">
+            <label for="obligations">إجمالي الالتزامات الشهرية الحالية (ر.س)</label>
+            <input type="number" id="obligations" min="0" step="50" placeholder="أقساط أخرى، إن وجدت" value="0">
+          </div>
+
+          <div class="field">
+            <label for="months">مدة التمويل</label>
+            <select id="months">
+              <option value="12">12 شهر (سنة)</option>
+              <option value="24">24 شهر (سنتان)</option>
+              <option value="36" selected>36 شهر (3 سنوات)</option>
+              <option value="48">48 شهر (4 سنوات)</option>
+              <option value="60">60 شهر (5 سنوات)</option>
+              <option value="72">72 شهر (6 سنوات)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="rate">نسبة الربح السنوية (%)</label>
+            <input type="number" id="rate" min="0" step="0.1" value="4.5">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">احسب القسط الشهري</button>
+        <p class="disclaimer">* هذه حاسبة تقديرية لأغراض التوضيح فقط، ولا تُعد عرض تمويل رسمي. القسط النهائي يخضع لموافقة جهة التمويل.</p>
+      </form>
+
+      <div class="calc-result" id="calcResult">
+        <div class="result-placeholder">
+          <span class="result-icon">🧮</span>
+          <p>املأ البيانات واضغط "احسب القسط الشهري" لعرض النتيجة هنا</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact" class="section contact-section">
+  <div class="container">
+    <h2 class="section-title">تواصل معنا</h2>
+    <p class="section-sub">فريقنا جاهز لمساعدتك في اختيار السيارة المناسبة وترتيب التمويل</p>
+    <div class="contact-grid">
+      <div class="contact-card">
+        <span class="contact-icon">📍</span>
+        <h3>الموقع</h3>
+        <p>المملكة العربية السعودية</p>
+      </div>
+      <div class="contact-card">
+        <span class="contact-icon">📞</span>
+        <h3>الهاتف</h3>
+        <p dir="ltr">920-000-000</p>
+      </div>
+      <div class="contact-card">
+        <span class="contact-icon">✉️</span>
+        <h3>البريد الإلكتروني</h3>
+        <p dir="ltr">info@rowaad-cars.example</p>
+      </div>
+      <div class="contact-card">
+        <span class="contact-icon">🕐</span>
+        <h3>ساعات العمل</h3>
+        <p>يوميًا من 9 صباحًا حتى 10 مساءً</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <p>© 2026 معرض رواد الاعتماد للسيارات. جميع الحقوق محفوظة.</p>
+  </div>
+</footer>
+
+<script src="js/script.js"></script>
+</body>
+</html>
