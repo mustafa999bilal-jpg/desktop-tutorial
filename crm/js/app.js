@@ -675,6 +675,29 @@
   /* ============================================================
      SETTINGS
   ============================================================ */
+  // Accepts either strict JSON or the raw JS snippet Firebase's console gives
+  // (unquoted keys, a "const firebaseConfig = ...;" wrapper, // comments, a
+  // trailing comma) — pasting that snippet as-is is the normal path for users.
+  function parseFirebaseConfig(raw) {
+    let text = String(raw || "").trim();
+    if (!text) throw new Error("empty");
+    try { return JSON.parse(text); } catch (e) {}
+    text = text.replace(/\/\/[^\n]*$/gm, "");
+    const namedMatch = text.match(/firebaseConfig\s*=\s*\{/);
+    const start = namedMatch ? namedMatch.index + namedMatch[0].length - 1 : text.indexOf("{");
+    if (start === -1) throw new Error("no object literal found");
+    let depth = 0, end = -1;
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === "{") depth++;
+      else if (text[i] === "}") { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end === -1) throw new Error("unbalanced braces");
+    const objLiteral = text.slice(start, end + 1);
+    const value = new Function('"use strict"; return (' + objLiteral + ");")();
+    if (!value || typeof value !== "object") throw new Error("not an object");
+    return value;
+  }
+
   const FIRESTORE_RULES = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -718,8 +741,8 @@ service cloud.firestore {
           </details>
 
           <form id="cloudConnectForm" class="form" style="margin-top:12px">
-            <label>الصق كود الإعدادات (firebaseConfig) هنا
-              <textarea name="config" rows="6" placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", ...}'></textarea>
+            <label>الصق كود firebaseConfig هنا (تقدر تلصقه زي ما هو من Firebase، مش لازم تعدّل فيه حاجة)
+              <textarea name="config" rows="8" placeholder='const firebaseConfig = {&#10;  apiKey: "...",&#10;  authDomain: "...",&#10;  projectId: "...",&#10;  ...&#10;};'></textarea>
             </label>
             <div id="cloudConnectError" class="form-error"></div>
             <div class="modal-actions" style="justify-content:flex-start">
@@ -770,9 +793,9 @@ service cloud.firestore {
         errEl.textContent = "";
         let config;
         try {
-          config = JSON.parse(raw);
+          config = parseFirebaseConfig(raw);
         } catch (e1) {
-          errEl.textContent = "الكود اللي لصقته مش JSON صحيح — تأكد إنك نسخت كائن firebaseConfig كامل بين { }";
+          errEl.textContent = "تعذرت قراءة الكود اللي لصقته — تأكد إنك نسخت كائن firebaseConfig كامل (من { لحد })، من قسم Your apps في إعدادات مشروع Firebase";
           return;
         }
         const btn = $("#btnConnectCloud");
