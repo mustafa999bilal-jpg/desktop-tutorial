@@ -870,7 +870,11 @@ service cloud.firestore {
   renderCurrentTab();
   updateSyncBadge();
 
-  const savedCloudConfig = CRM.getFirebaseConfig();
+  // A distributed build can pre-bake a Firebase config as `window.CRM_EMBEDDED_FIREBASE_CONFIG`
+  // (set in a small <script> before this file loads) so every rep's copy connects on its own —
+  // nobody has to type or paste anything. CRM.connectCloud() persists it on success, so later
+  // loads pick it up like any manually-entered config.
+  const savedCloudConfig = CRM.getFirebaseConfig() || (typeof window !== "undefined" ? window.CRM_EMBEDDED_FIREBASE_CONFIG : null);
   if (savedCloudConfig) {
     CRM.connectCloud(savedCloudConfig)
       .then(() => { toast("تم الاتصال بقاعدة البيانات المشتركة"); updateSyncBadge(); })
