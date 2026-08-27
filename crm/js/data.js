@@ -19,8 +19,11 @@ const CRM = (function () {
 
   const DEFAULT_SOURCES = ["فيسبوك", "انستغرام", "جوجل", "تيك توك", "سناب شات", "واتساب", "إحالة", "أخرى"];
   const REP_COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#4d7c0f"];
+  const FIREBASE_CONFIG_KEY = "crm_firebase_config_v1";
 
   let state = null;
+  let cloud = null; // { app, db, unsubs: [] } when connected to a shared Firestore backend
+  const changeListeners = [];
 
   function uid(prefix) {
     return prefix + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -53,15 +56,118 @@ const CRM = (function () {
   }
 
   function resetDemo() {
+    const prev = cloud ? state : null;
     state = seed();
     save();
+    if (cloud) {
+      (prev.leads || []).forEach((l) => cloudDelete("leads", l.id));
+      (prev.reps || []).forEach((r) => cloudDelete("reps", r.id));
+      state.leads.forEach((l) => cloudSet("leads", l.id, l));
+      state.reps.forEach((r) => cloudSet("reps", r.id, r));
+      cloudSetSettings();
+    }
+    notifyChange();
     return state;
   }
 
   function wipeAll() {
+    const prev = cloud ? state : null;
     state = { leads: [], reps: [], settings: defaultSettings() };
     save();
+    if (cloud) {
+      (prev.leads || []).forEach((l) => cloudDelete("leads", l.id));
+      (prev.reps || []).forEach((r) => cloudDelete("reps", r.id));
+      cloudSetSettings();
+    }
+    notifyChange();
     return state;
+  }
+
+  /* ---------------- change notifications ---------------- */
+  function onChange(cb) { changeListeners.push(cb); }
+  function notifyChange() { changeListeners.forEach((cb) => { try { cb(); } catch (e) { console.error(e); } }); }
+
+  /* ---------------- cloud sync (shared Firestore backend, optional) ---------------- */
+  // Data model when connected: collection "leads" (one doc per lead), collection "reps"
+  // (one doc per rep), and doc "meta/settings". Every device that connects with the same
+  // Firebase project config reads/writes the same collections, so changes made by one
+  // sales rep appear live on everyone else's screen (and this device's own screen updates
+  // instantly too — Firestore echoes local writes back through the same snapshot listener).
+  function getFirebaseConfig() {
+    try {
+      const raw = localStorage.getItem(FIREBASE_CONFIG_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function isCloudConnected() { return !!cloud; }
+
+  function connectCloud(config) {
+    if (typeof firebase === "undefined") return Promise.reject(new Error("مكتبة Firebase غير محمّلة في هذه الصفحة"));
+    disconnectCloud();
+    let app;
+    try {
+      app = firebase.initializeApp(config, "crm-" + Date.now());
+    } catch (e) {
+      return Promise.reject(e);
+    }
+    const db = app.firestore();
+    cloud = { app, db, unsubs: [] };
+
+    return app.auth().signInAnonymously().then(() => {
+      localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(config));
+      return new Promise((resolve, reject) => {
+        let repsLoaded = false, leadsLoaded = false, settingsLoaded = false;
+        let settled = false;
+        const maybeResolve = () => { if (!settled && repsLoaded && leadsLoaded && settingsLoaded) { settled = true; resolve(); } };
+        const onErr = (err) => { console.error("CRM cloud sync error:", err); if (!settled) { settled = true; reject(err); } };
+
+        cloud.unsubs.push(db.collection("reps").onSnapshot((snap) => {
+          state.reps = snap.docs.map((d) => d.data());
+          repsLoaded = true; save(); notifyChange(); maybeResolve();
+        }, onErr));
+
+        cloud.unsubs.push(db.collection("leads").onSnapshot((snap) => {
+          state.leads = snap.docs.map((d) => d.data()).sort((a, b) => b.createdAt - a.createdAt);
+          leadsLoaded = true; save(); notifyChange(); maybeResolve();
+        }, onErr));
+
+        cloud.unsubs.push(db.collection("meta").doc("settings").onSnapshot((doc) => {
+          if (doc.exists) state.settings = Object.assign(defaultSettings(), doc.data());
+          else db.collection("meta").doc("settings").set(state.settings || defaultSettings());
+          settingsLoaded = true; save(); notifyChange(); maybeResolve();
+        }, onErr));
+      });
+    }).catch((err) => { disconnectCloud(); throw err; });
+  }
+
+  function disconnectCloud() {
+    if (cloud) {
+      cloud.unsubs.forEach((u) => { try { u(); } catch (e) {} });
+      try { cloud.app.delete(); } catch (e) {}
+      cloud = null;
+    }
+  }
+
+  function forgetCloud() {
+    disconnectCloud();
+    localStorage.removeItem(FIREBASE_CONFIG_KEY);
+    notifyChange();
+  }
+
+  function cloudSet(collection, id, data) {
+    if (!cloud) return;
+    cloud.db.collection(collection).doc(id).set(data).catch((e) => console.error("CRM cloud write failed:", e));
+  }
+  function cloudDelete(collection, id) {
+    if (!cloud) return;
+    cloud.db.collection(collection).doc(id).delete().catch((e) => console.error("CRM cloud delete failed:", e));
+  }
+  function cloudSetSettings() {
+    if (!cloud) return;
+    cloud.db.collection("meta").doc("settings").set(state.settings).catch((e) => console.error("CRM cloud write failed:", e));
   }
 
   /* ---------------- seed demo data ---------------- */
@@ -169,6 +275,8 @@ const CRM = (function () {
     }
     state.leads.unshift(lead);
     save();
+    cloudSet("leads", lead.id, lead);
+    notifyChange();
     return lead;
   }
 
@@ -177,12 +285,16 @@ const CRM = (function () {
     if (!lead) return null;
     Object.assign(lead, patch);
     save();
+    cloudSet("leads", lead.id, lead);
+    notifyChange();
     return lead;
   }
 
   function deleteLead(id) {
     state.leads = state.leads.filter((l) => l.id !== id);
     save();
+    cloudDelete("leads", id);
+    notifyChange();
   }
 
   function assignLead(id, repId) {
@@ -193,6 +305,8 @@ const CRM = (function () {
     lead.assignedAt = repId ? Date.now() : null;
     lead.history.push({ ts: Date.now(), type: "assigned", text: repId ? `تم التوزيع على ${rep ? rep.name : ""}` : "تم إلغاء التوزيع" });
     save();
+    cloudSet("leads", lead.id, lead);
+    notifyChange();
     return lead;
   }
 
@@ -219,7 +333,11 @@ const CRM = (function () {
       load[pick.id]++;
       count++;
     });
-    if (count) save();
+    if (count) {
+      save();
+      unassigned.forEach((lead) => { if (lead.assignedRepId) cloudSet("leads", lead.id, lead); });
+      notifyChange();
+    }
     return count;
   }
 
@@ -230,6 +348,8 @@ const CRM = (function () {
     if (status === "lost") lead.lostReason = (extra && extra.lostReason) || lead.lostReason;
     lead.history.push({ ts: Date.now(), type: "status", text: `تغيير الحالة إلى: ${STATUS_LABELS[status]}` });
     save();
+    cloudSet("leads", lead.id, lead);
+    notifyChange();
     return lead;
   }
 
@@ -245,6 +365,8 @@ const CRM = (function () {
     }
     lead.history.push({ ts: now, type: "contact", text: note && note.trim() ? "تسجيل تواصل: " + note.trim() : "تسجيل تواصل مع العميل" });
     save();
+    cloudSet("leads", lead.id, lead);
+    notifyChange();
     return lead;
   }
 
@@ -253,6 +375,8 @@ const CRM = (function () {
     if (!lead) return;
     lead.nextFollowUpAt = ts || null;
     save();
+    cloudSet("leads", lead.id, lead);
+    notifyChange();
     return lead;
   }
 
@@ -268,6 +392,8 @@ const CRM = (function () {
     };
     state.reps.push(rep);
     save();
+    cloudSet("reps", rep.id, rep);
+    notifyChange();
     return rep;
   }
 
@@ -276,6 +402,8 @@ const CRM = (function () {
     if (!rep) return;
     Object.assign(rep, patch);
     save();
+    cloudSet("reps", rep.id, rep);
+    notifyChange();
     return rep;
   }
 
@@ -284,6 +412,8 @@ const CRM = (function () {
     if (!rep) return;
     rep.active = !rep.active;
     save();
+    cloudSet("reps", rep.id, rep);
+    notifyChange();
     return rep;
   }
 
@@ -291,6 +421,8 @@ const CRM = (function () {
   function updateSettings(patch) {
     Object.assign(state.settings, patch);
     save();
+    cloudSetSettings();
+    notifyChange();
     return state.settings;
   }
 
@@ -300,6 +432,8 @@ const CRM = (function () {
     if (!state.settings.adSources.includes(name)) {
       state.settings.adSources.push(name);
       save();
+      cloudSetSettings();
+      notifyChange();
     }
   }
 
@@ -373,12 +507,13 @@ const CRM = (function () {
 
   return {
     STATUS_LABELS, STATUS_ORDER, OPEN_STATUSES, REP_COLORS,
-    load, save, resetDemo, wipeAll,
+    load, save, resetDemo, wipeAll, onChange,
     getState, getLeads, getLead, getReps, getActiveReps, getRep, getSettings,
     addLead, updateLead, deleteLead, assignLead, autoDistribute, changeStatus, logContact, setFollowUp,
     addRep, updateRep, toggleRepActive,
     updateSettings, addSource,
     slaStatus, formatDuration,
     leadsInRange, repStats,
+    getFirebaseConfig, isCloudConnected, connectCloud, disconnectCloud, forgetCloud,
   };
 })();

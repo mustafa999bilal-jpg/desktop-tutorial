@@ -675,9 +675,60 @@
   /* ============================================================
      SETTINGS
   ============================================================ */
+  const FIRESTORE_RULES = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}`;
+
   function renderSettings() {
     const settings = CRM.getSettings();
+    const connected = CRM.isCloudConnected();
+    const hasSavedConfig = !!CRM.getFirebaseConfig();
     $("#view").innerHTML = `
+      <div class="card">
+        <h3 class="card-title">مشاركة البيانات مع الفريق (مزامنة سحابية)</h3>
+        <p class="cell-sub">افتراضيًا البيانات محفوظة على هذا الجهاز فقط. لو عايز إنت والمناديب تشوفوا نفس الليدز لحظيًا من أي جهاز، وصّل النظام بقاعدة بيانات Firebase مجانية (خطوات بسيطة، حساب جوجل كفاية).</p>
+
+        <div id="cloudStatusBox" class="cloud-status ${connected ? "on" : hasSavedConfig ? "pending" : "off"}">
+          ${connected ? "🟢 متصل — البيانات الآن مشتركة بينك وبين كل من يفتح النظام بنفس الإعدادات" : hasSavedConfig ? "🟡 محفوظ إعدادات اتصال لكن غير متصل حاليًا" : "⚪ غير متصل — البيانات محلية على هذا الجهاز فقط"}
+        </div>
+
+        ${connected ? `
+          <div class="modal-actions" style="margin-top:10px">
+            <button class="btn btn-danger-outline" id="btnDisconnectCloud">قطع الاتصال والرجوع للوضع المحلي</button>
+          </div>
+        ` : `
+          <details class="cloud-guide" ${hasSavedConfig ? "" : "open"}>
+            <summary>خطوات إنشاء قاعدة بيانات مجانية (Firebase) — 5 دقايق</summary>
+            <ol>
+              <li>ادخل على <b>console.firebase.google.com</b> وسجل بحساب Google بتاعك.</li>
+              <li>اضغط "Add project" وسمّي المشروع أي اسم (مثلاً crm-sales) وكمّل الإنشاء.</li>
+              <li>من القائمة الجانبية: Build ← Firestore Database ← Create database، اختر أي موقع سيرفر واضغط Next حتى تنشئها (اختر وضع "test mode" أو "production" ثم استخدم القواعد اللي تحت).</li>
+              <li>من نفس صفحة Firestore افتح تبويب Rules، امسح المكتوب والصق القواعد دي واضغط Publish:
+                <pre class="code-block" id="rulesBlock">${esc(FIRESTORE_RULES)}</pre>
+                <button type="button" class="btn btn-sm" id="btnCopyRules">نسخ القواعد</button>
+              </li>
+              <li>من القائمة الجانبية: Build ← Authentication ← Get started ← فعّل طريقة "Anonymous" من تبويب Sign-in method.</li>
+              <li>ارجع لصفحة المشروع الرئيسية، اضغط أيقونة ⚙️ بجانب "Project Overview" ← Project settings، انزل لقسم "Your apps" واضغط أيقونة الويب &lt;/&gt; لإنشاء تطبيق ويب، وهيديك كائن <code>firebaseConfig</code> — انسخه كامل والصقه تحت.</li>
+            </ol>
+          </details>
+
+          <form id="cloudConnectForm" class="form" style="margin-top:12px">
+            <label>الصق كود الإعدادات (firebaseConfig) هنا
+              <textarea name="config" rows="6" placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", ...}'></textarea>
+            </label>
+            <div id="cloudConnectError" class="form-error"></div>
+            <div class="modal-actions" style="justify-content:flex-start">
+              <button type="submit" class="btn btn-primary" id="btnConnectCloud">اتصال ومزامنة</button>
+            </div>
+          </form>
+        `}
+      </div>
+
       <div class="card">
         <h3 class="card-title">مصادر الإعلانات</h3>
         <div class="tag-list" id="sourceTags">
@@ -704,12 +755,74 @@
       CRM.addSource(f.get("source"));
       renderSettings();
     });
+
+    if ($("#btnCopyRules")) {
+      $("#btnCopyRules").addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(FIRESTORE_RULES); toast("تم نسخ القواعد"); }
+        catch (e) { toast("تعذر النسخ التلقائي — انسخ النص يدويًا"); }
+      });
+    }
+    if ($("#cloudConnectForm")) {
+      $("#cloudConnectForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const raw = new FormData(e.target).get("config");
+        const errEl = $("#cloudConnectError");
+        errEl.textContent = "";
+        let config;
+        try {
+          config = JSON.parse(raw);
+        } catch (e1) {
+          errEl.textContent = "الكود اللي لصقته مش JSON صحيح — تأكد إنك نسخت كائن firebaseConfig كامل بين { }";
+          return;
+        }
+        const btn = $("#btnConnectCloud");
+        btn.disabled = true; btn.textContent = "جاري الاتصال...";
+        try {
+          await CRM.connectCloud(config);
+          toast("تم الاتصال بنجاح — البيانات أصبحت مشتركة");
+          updateSyncBadge();
+          renderSettings();
+          renderCurrentTab();
+        } catch (err) {
+          console.error(err);
+          errEl.textContent = "تعذر الاتصال: " + (err && err.message ? err.message : "تحقق من الإعدادات وقواعد Firestore");
+          btn.disabled = false; btn.textContent = "اتصال ومزامنة";
+        }
+      });
+    }
+    if ($("#btnDisconnectCloud")) {
+      $("#btnDisconnectCloud").addEventListener("click", () => {
+        if (confirm("سيتم قطع الاتصال بقاعدة البيانات المشتركة والرجوع لتخزين البيانات على هذا الجهاز فقط. متابعة؟")) {
+          CRM.forgetCloud();
+          updateSyncBadge();
+          toast("تم قطع الاتصال — الوضع المحلي الآن");
+          renderSettings();
+        }
+      });
+    }
+
     $("#btnResetDemo").addEventListener("click", () => {
       if (confirm("سيتم استبدال البيانات الحالية ببيانات تجريبية. متابعة؟")) { CRM.resetDemo(); toast("تم تحميل بيانات تجريبية"); renderCurrentTab(); }
     });
     $("#btnWipeAll").addEventListener("click", () => {
       if (confirm("سيتم حذف كل الليدز والمناديب نهائيًا. هل أنت متأكد؟")) { CRM.wipeAll(); toast("تم حذف جميع البيانات"); renderCurrentTab(); }
     });
+  }
+
+  /* ---------------- cloud sync status badge ---------------- */
+  function updateSyncBadge() {
+    const el = $("#syncStatus");
+    if (!el) return;
+    if (CRM.isCloudConnected()) {
+      el.textContent = "🟢 متصل — بيانات مشتركة";
+      el.className = "sync-status on";
+    } else if (CRM.getFirebaseConfig()) {
+      el.textContent = "🟡 جاري الاتصال...";
+      el.className = "sync-status pending";
+    } else {
+      el.textContent = "⚪ وضع محلي";
+      el.className = "sync-status off";
+    }
   }
 
   /* ---------------- utils ---------------- */
@@ -728,6 +841,20 @@
   $("#menuToggle").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
 
   /* ---------------- boot ---------------- */
+  CRM.onChange(() => { renderCurrentTab(); updateSyncBadge(); });
+
   if (!location.hash) location.hash = "#dashboard";
   renderCurrentTab();
+  updateSyncBadge();
+
+  const savedCloudConfig = CRM.getFirebaseConfig();
+  if (savedCloudConfig) {
+    CRM.connectCloud(savedCloudConfig)
+      .then(() => { toast("تم الاتصال بقاعدة البيانات المشتركة"); updateSyncBadge(); })
+      .catch((err) => {
+        console.error("CRM cloud auto-connect failed:", err);
+        toast("تعذر الاتصال بالبيانات المشتركة — يعمل النظام محليًا مؤقتًا");
+        updateSyncBadge();
+      });
+  }
 })();

@@ -32,6 +32,8 @@
     <header class="topbar">
       <button class="icon-btn" id="menuToggle" aria-label="القائمة">☰</button>
       <h1 id="pageTitle">لوحة التحكم</h1>
+      <span class="spacer"></span>
+      <span id="syncStatus" class="sync-status off"></span>
     </header>
     <main class="content" id="app">
       <div id="view"></div>
@@ -43,6 +45,9 @@
 <div id="toastHost" class="toast-host"></div>
 
 <script src="js/vendor/chart.umd.js"></script>
+<script src="js/vendor/firebase/firebase-app-compat.js"></script>
+<script src="js/vendor/firebase/firebase-auth-compat.js"></script>
+<script src="js/vendor/firebase/firebase-firestore-compat.js"></script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 </body>
