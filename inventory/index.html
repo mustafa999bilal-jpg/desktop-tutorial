@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>إدارة المخزون | رواد الاعتماد</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="inventory.css">
+</head>
+<body>
+
+<div class="app">
+  <!-- ========== Sidebar ========== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">ر</div>
+      <div>
+        <div class="brand-name">رواد الاعتماد</div>
+        <div class="brand-sub">نظام إدارة المخزون</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-label">الرئيسية</div>
+      <button class="nav-item active" data-page="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>لوحة التحكم</button>
+      <div class="nav-label">المخزون</div>
+      <button class="nav-item" data-page="inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M6 17l1.5-6h9L18 17M7.5 11 9 7h6l1.5 4"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>السيارات<span class="badge-count hidden" id="agingBadge"></span></button>
+      <button class="nav-item" data-page="sales"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>المبيعات</button>
+      <button class="nav-item" data-page="expenses"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>المصاريف والصيانة</button>
+      <button class="nav-item" data-page="movements"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>سجل الحركات</button>
+      <div class="nav-label">الإدارة</div>
+      <button class="nav-item" data-page="suppliers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>الموردون</button>
+      <button class="nav-item" data-page="reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-6"/></svg>التقارير</button>
+      <button class="nav-item cloud-only admin-only" data-page="users"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>الموظفون<span class="badge-count hidden" id="pendingBadge"></span></button>
+      <button class="nav-item admin-only" data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>الإعدادات</button>
+    </nav>
+    <div class="sidebar-foot">
+      <a href="../index.html">← العودة لموقع المعرض</a>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <!-- ========== Main ========== -->
+  <main class="main">
+    <header class="topbar">
+      <button class="btn-icon menu-btn" id="menuBtn" aria-label="القائمة"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <h1 id="pageTitle">لوحة التحكم</h1>
+      <div class="spacer"></div>
+      <div class="global-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" id="globalSearch" placeholder="ابحث برقم المخزون، الهيكل، اللوحة أو الموديل…">
+      </div>
+      <span class="sync-pill cloud-only" id="syncStatus" title="حالة الحفظ في قاعدة البيانات"></span>
+      <button class="user-chip" id="userChip" title="حسابي">
+        <span class="uname" id="userName">—</span>
+        <span class="avatar" id="userAvatar">؟</span>
+      </button>
+    </header>
+
+    <div class="content">
+
+      <!-- ===== Dashboard ===== -->
+      <section class="page active" id="page-dashboard">
+        <div class="page-head">
+          <div>
+            <h2>نظرة عامة</h2>
+            <p id="todayLabel"></p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" data-action="sell-quick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>تسجيل بيع</button>
+            <button class="btn btn-primary" data-action="add-car"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>إضافة سيارة</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="kpiGrid"></div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <h3>المبيعات والأرباح — آخر 6 أشهر</h3>
+              <div class="chart-legend"><span><i style="background:var(--gold)"></i>إيراد</span><span><i style="background:var(--success)"></i>ربح</span></div>
+            </div>
+            <div class="bar-chart" id="salesChart"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>توزيع حالة المخزون</h3></div>
+            <div class="donut-wrap" id="statusDonut"></div>
+          </div>
+        </div>
+        <div class="grid-2-eq">
+          <div class="card">
+            <div class="card-head"><h3>تنبيهات تحتاج انتباهك</h3><span class="muted" id="alertsCount"></span></div>
+            <div class="list" id="alertsList"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>آخر الحركات</h3><button class="btn btn-sm btn-ghost" data-goto="movements">عرض الكل</button></div>
+            <div class="list" id="recentList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Inventory ===== -->
+      <section class="page" id="page-inventory">
+        <div class="page-head">
+          <div>
+            <h2>مخزون السيارات</h2>
+            <p>إدارة كاملة لكل سيارة من الشراء حتى البيع</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" data-action="export-inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>تصدير Excel</button>
+            <button class="btn btn-primary" data-action="add-car"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>إضافة سيارة</button>
+          </div>
+        </div>
+        <div class="chips" id="statusChips"></div>
+        <div class="toolbar">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input class="input" type="search" id="invSearch" placeholder="بحث: الماركة، الموديل، رقم الهيكل، اللوحة، رقم المخزون…">
+          </div>
+          <select class="select" id="fMake"><option value="">كل الماركات</option></select>
+          <select class="select" id="fBranch"><option value="">كل الفروع</option></select>
+          <select class="select" id="fCondition"><option value="">جديد ومستعمل</option><option value="new">جديد</option><option value="used">مستعمل</option></select>
+          <select class="select" id="fAge"><option value="">كل الأعمار</option><option value="0-30">أقل من 30 يوم</option><option value="31-60">31 - 60 يوم</option><option value="61-90">61 - 90 يوم</option><option value="91-9999">أكثر من 90 يوم</option></select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr id="invHead">
+                <th class="sortable" data-sort="stockNo">رقم المخزون</th>
+                <th class="sortable" data-sort="name">السيارة</th>
+                <th>رقم الهيكل (VIN)</th>
+                <th class="sortable" data-sort="mileage">الممشى</th>
+                <th>الفرع</th>
+                <th class="sortable" data-sort="totalCost">التكلفة</th>
+                <th class="sortable" data-sort="salePrice">سعر البيع</th>
+                <th class="sortable" data-sort="margin">الهامش</th>
+                <th class="sortable" data-sort="days">أيام بالمخزون</th>
+                <th class="sortable" data-sort="status">الحالة</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="invBody"></tbody>
+          </table>
+          <div class="table-foot">
+            <span id="invSummary"></span>
+            <div class="pager" id="invPager"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Sales ===== -->
+      <section class="page" id="page-sales">
+        <div class="page-head">
+          <div>
+            <h2>المبيعات</h2>
+            <p>كل عمليات البيع مع الفواتير والأرباح</p>
+          </div>
+          <div class="page-actions">
+            <select class="select" id="salesPeriod" style="width:auto">
+              <option value="all">كل الفترات</option>
+              <option value="month" selected>هذا الشهر</option>
+              <option value="3m">آخر 3 أشهر</option>
+              <option value="year">هذه السنة</option>
+            </select>
+            <button class="btn btn-ghost" data-action="export-sales"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>تصدير Excel</button>
+            <button class="btn btn-primary" data-action="sell-quick">تسجيل بيع</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="salesKpis"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>رقم الفاتورة</th><th>التاريخ</th><th>السيارة</th><th>العميل</th><th>طريقة الدفع</th><th>البائع</th><th>سعر البيع</th><th>التكلفة</th><th>صافي الربح</th><th></th>
+            </tr></thead>
+            <tbody id="salesBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== Expenses ===== -->
+      <section class="page" id="page-expenses">
+        <div class="page-head">
+          <div>
+            <h2>المصاريف والصيانة</h2>
+            <p>كل مصروف يُحمَّل على تكلفة السيارة ويؤثر على هامش الربح</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" data-action="add-expense"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>إضافة مصروف</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="expKpis"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>التاريخ</th><th>السيارة</th><th>البند</th><th>الوصف</th><th>المبلغ</th><th>بواسطة</th><th></th></tr></thead>
+            <tbody id="expBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== Movements ===== -->
+      <section class="page" id="page-movements">
+        <div class="page-head">
+          <div>
+            <h2>سجل الحركات</h2>
+            <p>سجل تدقيق كامل لكل عملية تمت على المخزون</p>
+          </div>
+          <div class="page-actions">
+            <select class="select" id="movType" style="width:auto"><option value="">كل الحركات</option></select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>التاريخ والوقت</th><th>الحركة</th><th>السيارة</th><th>التفاصيل</th><th>المبلغ</th><th>المستخدم</th></tr></thead>
+            <tbody id="movBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== Suppliers ===== -->
+      <section class="page" id="page-suppliers">
+        <div class="page-head">
+          <div>
+            <h2>الموردون ومصادر الشراء</h2>
+            <p>الوكلاء، المزادات، والأفراد الذين تشتري منهم</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" data-action="add-supplier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>إضافة مورد</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>المورد</th><th>النوع</th><th>الجوال</th><th>المدينة</th><th>عدد السيارات</th><th>إجمالي المشتريات</th><th>في المخزون</th><th></th></tr></thead>
+            <tbody id="supBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== Reports ===== -->
+      <section class="page" id="page-reports">
+        <div class="page-head">
+          <div>
+            <h2>التقارير والتحليلات</h2>
+            <p>مؤشرات تساعدك تتخذ قرارات الشراء والتسعير</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-ghost" data-action="print-stock">طباعة كشف المخزون</button>
+          </div>
+        </div>
+        <div class="grid-2-eq">
+          <div class="card">
+            <div class="card-head"><h3>أعمار المخزون</h3><span class="muted">عدد السيارات غير المباعة</span></div>
+            <div class="hbar-list" id="agingReport"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>قيمة المخزون حسب الفرع</h3><span class="muted">بسعر التكلفة</span></div>
+            <div class="hbar-list" id="branchReport"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-head"><h3>أداء الماركات</h3><span class="muted">على كل الفترات</span></div>
+          <div class="table-wrap" style="border:none">
+            <table>
+              <thead><tr><th>الماركة</th><th>في المخزون</th><th>مباع</th><th>إجمالي المبيعات</th><th>صافي الربح</th><th>متوسط الهامش</th><th>متوسط أيام البيع</th></tr></thead>
+              <tbody id="makeReport"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>أداء البائعين</h3></div>
+          <div class="table-wrap" style="border:none">
+            <table>
+              <thead><tr><th>البائع</th><th>عدد المبيعات</th><th>إجمالي المبيعات</th><th>صافي الربح</th></tr></thead>
+              <tbody id="sellerReport"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Users ===== -->
+      <section class="page" id="page-users">
+        <div class="page-head">
+          <div>
+            <h2>الموظفون والصلاحيات</h2>
+            <p>من يقدر يدخل النظام وماذا يستطيع أن يفعل</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" data-action="add-user"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>إضافة موظف</button>
+          </div>
+        </div>
+        <div class="alert info">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <div><b>المدير:</b> كل الصلاحيات، بما فيها الحذف وإلغاء البيع والإعدادات وإدارة الموظفين.<br><b>موظف:</b> يضيف ويعدّل السيارات، يحجز ويبيع، يسجل المصاريف وينقل بين الفروع — بدون حذف أو إلغاء بيع أو تعديل إعدادات.<br>أي حساب جديد يُنشأ من خارج هذه الصفحة يبقى <b>موقوفًا</b> حتى يفعّله المدير.</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الموظف</th><th>البريد الإلكتروني</th><th>الصلاحية</th><th>الحالة</th><th>تاريخ الإضافة</th><th>مبيعاته</th><th></th></tr></thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== Settings ===== -->
+      <section class="page" id="page-settings">
+        <div class="page-head">
+          <div>
+            <h2>الإعدادات</h2>
+            <p>بيانات المنشأة، الفروع، والنسخ الاحتياطي</p>
+          </div>
+        </div>
+        <div class="alert info">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <div class="local-only"><b>الوضع المحلي:</b> البيانات محفوظة على هذا المتصفح فقط لأن قاعدة البيانات لم تُربط بعد (ملف <span class="mono">inventory/config.js</span>). خذ نسخة احتياطية بشكل دوري.</div>
+          <div class="cloud-only"><b>متصل بقاعدة البيانات:</b> كل التغييرات تُحفظ فورًا وتظهر لكل الموظفين لحظيًا. النسخة الاحتياطية اختيارية للاحتفاظ بنسخة خارجية.</div>
+        </div>
+        <div class="settings-grid">
+          <div class="card">
+            <div class="card-head"><h3>بيانات المنشأة والفاتورة</h3></div>
+            <form id="settingsForm" class="form-grid cols-2">
+              <div class="field span-2"><label>اسم المنشأة</label><input class="input" name="companyName"></div>
+              <div class="field"><label>الرقم الضريبي</label><input class="input" name="vatNumber" dir="ltr"></div>
+              <div class="field"><label>السجل التجاري</label><input class="input" name="crNumber" dir="ltr"></div>
+              <div class="field"><label>نسبة ضريبة القيمة المضافة (%)</label><input class="input" type="number" step="0.1" min="0" name="vatRate"></div>
+              <div class="field"><label>تنبيه تقادم المخزون بعد (يوم)</label><input class="input" type="number" min="1" name="agingDays"></div>
+              <div class="field"><label>الحد الأدنى لهامش الربح (%)</label><input class="input" type="number" step="0.5" min="0" name="minMargin"></div>
+              <div class="field local-only"><label>اسم المستخدم الحالي</label><input class="input" name="currentUser"></div>
+              <div class="field span-2"><label>العنوان والهاتف (يظهر على الفاتورة)</label><input class="input" name="address"></div>
+              <div class="field span-2"><button class="btn btn-primary" type="submit">حفظ الإعدادات</button></div>
+            </form>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div class="card-head"><h3>الفروع / مواقع التخزين</h3></div>
+              <div class="tag-list" id="branchTags"></div>
+              <form class="inline-form" id="branchForm"><input class="input" name="branch" placeholder="اسم فرع أو ساحة جديدة" required><button class="btn btn-ghost" type="submit">إضافة</button></form>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>فريق المبيعات</h3></div>
+              <div class="tag-list" id="sellerTags"></div>
+              <form class="inline-form" id="sellerForm"><input class="input" name="seller" placeholder="اسم البائع" required><button class="btn btn-ghost" type="submit">إضافة</button></form>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>النسخ الاحتياطي والبيانات</h3></div>
+              <div class="page-actions">
+                <button class="btn btn-ghost" data-action="backup">تحميل نسخة احتياطية</button>
+                <label class="btn btn-ghost">استيراد نسخة<input type="file" id="importFile" accept=".json,application/json" hidden></label>
+                <button class="btn btn-ghost" data-action="demo">تحميل بيانات تجريبية</button>
+                <button class="btn btn-danger" data-action="wipe">مسح كل البيانات</button>
+              </div>
+              <p class="muted" style="font-size:0.8rem;margin-top:10px" id="storageInfo"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- Login -->
+<div class="auth-screen hidden" id="authScreen">
+  <div class="auth-card">
+    <div class="brand-logo auth-logo">ر</div>
+    <h1>رواد الاعتماد</h1>
+    <p class="muted">نظام إدارة المخزون — دخول الموظفين</p>
+    <div class="auth-state" id="authLoading"><div class="spinner"></div><p class="muted">جاري التحميل…</p></div>
+    <form class="auth-state hidden" id="loginForm" novalidate>
+      <div class="field"><label>البريد الإلكتروني</label><input class="input" type="email" name="email" dir="ltr" autocomplete="username" required></div>
+      <div class="field"><label>كلمة المرور</label><input class="input" type="password" name="password" dir="ltr" autocomplete="current-password" required></div>
+      <p class="auth-msg" id="loginMsg"></p>
+      <button class="btn btn-primary btn-block" type="submit">تسجيل الدخول</button>
+      <button class="link-btn" type="button" id="forgotBtn">نسيت كلمة المرور؟</button>
+    </form>
+    <div class="auth-state hidden" id="authInactive">
+      <div class="alert warn" style="text-align:right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div id="inactiveMsg">حسابك موقوف أو بانتظار تفعيل المدير. تواصل مع مدير النظام.</div></div>
+      <button class="btn btn-ghost btn-block" type="button" data-action="logout">تسجيل الخروج</button>
+    </div>
+    <div class="auth-state hidden" id="authError">
+      <div class="alert warn" style="text-align:right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div id="authErrorMsg"></div></div>
+      <button class="btn btn-ghost btn-block" type="button" onclick="location.reload()">إعادة المحاولة</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal & drawer containers -->
+<div class="overlay" id="modalOverlay"><div class="modal" id="modal"></div></div>
+<div class="overlay drawer-overlay" id="drawerOverlay"><div class="drawer" id="drawer"></div></div>
+<div class="toasts" id="toasts"></div>
+<div id="printArea"></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script src="inventory.js"></script>
+</body>
+</html>
