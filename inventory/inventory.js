@@ -8,6 +8,22 @@
 const STORE_KEY = "rowaad_inventory_v1";
 const PAGE_SIZE = 15;
 
+/* ---------------- الاتصال بقاعدة البيانات ---------------- */
+const CFG = window.ROWAAD_CONFIG || {};
+const CLOUD_CONFIGURED = !!(CFG.supabaseUrl && CFG.supabaseAnonKey);
+const CLOUD = CLOUD_CONFIGURED && !!(window.supabase && window.supabase.createClient);
+const sb = CLOUD ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }) : null;
+const SYNC_TABLES = ["sales", "suppliers", "cars", "expenses"]; // ترتيب الإرسال (البيع أولًا لاكتشاف التعارض قبل أي تعديل)
+const ADMIN_ACTIONS = new Set(["delete-car", "cancel-sale", "delete-expense", "delete-supplier", "remove-branch", "remove-seller", "backup", "demo", "wipe", "add-user", "edit-user", "reset-user-password"]);
+let me = null;        // ملف الموظف الحالي
+let profiles = [];    // كل الموظفين
+let snap = {};        // آخر نسخة محفوظة على الخادم لكل سجل
+let settingsSnap = "";
+let syncChain = Promise.resolve();
+let retryTimer = null;
+let channel = null;
+const isAdmin = () => !CLOUD || !!(me && me.active && me.role === "admin");
+
 /* ---------------- ثوابت ---------------- */
 const STATUS = {
   available:   { label: "متاحة للبيع", cls: "st-available", color: "#3fae6a" },
@@ -124,6 +140,7 @@ function load() {
 }
 
 function save() {
+  if (CLOUD) { queueSync(); return; }
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(db));
   } catch (e) {
@@ -141,11 +158,13 @@ const totalCost = (c) => num(c.costPrice) + carExpenses(c.id);
 const daysInStock = (c) => daysBetween(c.purchaseDate || today(), c.status === "sold" && c.soldDate ? c.soldDate : today());
 const marginPct = (price, cost) => price > 0 ? ((price - cost) / price) * 100 : 0;
 
-function nextStockNo() {
+async function nextStockNo() {
+  if (CLOUD) { const { data, error } = await sb.rpc("next_stock_no"); if (error) throw error; return data; }
   db.counters.stock += 1;
   return `RW-${db.counters.stock}`;
 }
-function nextInvoiceNo() {
+async function nextInvoiceNo() {
+  if (CLOUD) { const { data, error } = await sb.rpc("next_invoice_no"); if (error) throw error; return data; }
   db.counters.invoice += 1;
   return `INV-${new Date().getFullYear()}-${String(db.counters.invoice).padStart(4, "0")}`;
 }
@@ -161,7 +180,7 @@ function logMove(type, car, detail = "", amount = null, ts = null) {
     amount,
     user: db.settings.currentUser || "—",
   });
-  if (db.movements.length > 5000) db.movements.length = 5000;
+  if (!CLOUD && db.movements.length > 5000) db.movements.length = 5000;
 }
 
 function getAlerts() {
@@ -356,6 +375,457 @@ function seedDemoWithTimes() {
   return data;
 }
 
+
+/* ===========================================================
+   التزامن مع قاعدة البيانات (Supabase)
+   =========================================================== */
+const appUrl = () => location.origin + location.pathname;
+const chunks = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
+const settingsForSync = (st) => { const { currentUser, ...rest } = st; return rest; };
+const isNetworkError = (err) => err && !err.code && /fetch|network|Failed|timeout/i.test(String(err.message || err));
+
+function friendlyError(err) {
+  const msg = String((err && err.message) || err || "");
+  if (isNetworkError(err)) return "تعذّر الاتصال بالخادم — تحقق من الإنترنت";
+  if (err && err.code === "23505") {
+    if (msg.includes("sales_car_key")) return "هذه السيارة تم بيعها بالفعل من موظف آخر";
+    if (msg.includes("cars_vin_key")) return "رقم الهيكل مسجل لسيارة أخرى";
+    return "هذا السجل موجود مسبقًا";
+  }
+  if (err && (err.code === "42501" || /row-level security|permission denied|غير مصرح/i.test(msg))) return "ليس لديك صلاحية لهذه العملية";
+  if (/Invalid login credentials/i.test(msg)) return "البريد الإلكتروني أو كلمة المرور غير صحيحة";
+  if (/Email not confirmed/i.test(msg)) return "لم يتم تأكيد البريد الإلكتروني بعد — راجع بريدك";
+  if (/already registered|already been registered|already exists/i.test(msg)) return "هذا البريد مسجل مسبقًا";
+  if (/Password should be|at least 6|weak/i.test(msg)) return "كلمة المرور ضعيفة — استخدم 8 أحرف على الأقل مع أرقام";
+  if (/rate limit|too many/i.test(msg)) return "محاولات كثيرة — انتظر قليلًا ثم أعد المحاولة";
+  if (/[؀-ۿ]/.test(msg)) return msg; // رسائل عربية قادمة من قاعدة البيانات
+  return "حدث خطأ: " + msg;
+}
+
+function setSyncState(state) {
+  const el = $("#syncStatus");
+  if (!el) return;
+  el.className = `sync-pill cloud-only ${state}`;
+  el.textContent = { saved: "✓ محفوظ", saving: "جاري الحفظ…", offline: "⚠ غير متصل — سيُعاد الحفظ" }[state] || "";
+}
+
+async function fetchAll(table, { newestFirst = false, limit = Infinity } = {}) {
+  const out = [];
+  for (let from = 0; out.length < limit; from += 1000) {
+    let q = sb.from(table).select("id,data,created_at");
+    q = newestFirst ? q.order("created_at", { ascending: false }) : q.order("id");
+    const { data, error } = await q.range(from, from + 999);
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < 1000) break;
+  }
+  return out;
+}
+
+async function loadCloud() {
+  const [cars, suppliers, expenses, sales, movements, st, profs] = await Promise.all([
+    fetchAll("cars"), fetchAll("suppliers"), fetchAll("expenses"), fetchAll("sales"),
+    fetchAll("movements", { newestFirst: true, limit: 3000 }),
+    sb.from("app_settings").select("data").eq("id", 1).maybeSingle(),
+    sb.from("profiles").select("*").order("created_at"),
+  ]);
+  if (st.error) throw st.error;
+  if (profs.error) throw profs.error;
+  profiles = profs.data || [];
+  const base = defaultDB();
+  const next = { ...base, settings: { ...base.settings, ...settingsForSync((st.data && st.data.data) || {}) } };
+  const rows = { cars, suppliers, expenses, sales };
+  snap = {};
+  SYNC_TABLES.forEach((t) => {
+    next[t] = rows[t].map((r) => ({ ...r.data, id: r.id }));
+    snap[t] = new Map(next[t].map((o) => [o.id, JSON.stringify(o)]));
+  });
+  next.movements = movements.map((r) => ({ ...r.data, id: r.id, ts: r.data.ts || r.created_at })).sort((a, b) => b.ts.localeCompare(a.ts));
+  snap.movements = new Set(next.movements.map((m) => m.id));
+  next.settings.currentUser = me.full_name || me.email;
+  // إذا لم تُحفظ الإعدادات بعد، يرسلها المدير في أول مزامنة
+  settingsSnap = st.data ? JSON.stringify(settingsForSync(next.settings)) : "";
+  db = next;
+}
+
+async function reloadCloud() {
+  try {
+    await loadCloud();
+    setSyncState("saved");
+  } catch (err) {
+    setSyncState("offline");
+    toast(friendlyError(err), "error");
+  }
+  renderNow();
+}
+
+function queueSync() {
+  setSyncState("saving");
+  syncChain = syncChain.then(syncNow);
+  return syncChain;
+}
+
+async function syncNow() {
+  if (!CLOUD || !me) return;
+  clearTimeout(retryTimer);
+  try {
+    for (const t of SYNC_TABLES) {
+      const ups = [];
+      db[t].forEach((o) => { const j = JSON.stringify(o); if (snap[t].get(o.id) !== j) ups.push([o.id, j]); });
+      for (const part of chunks(ups, 400)) {
+        const { error } = await sb.from(t).upsert(part.map(([id, j]) => ({ id, data: JSON.parse(j) })));
+        if (error) throw error;
+        part.forEach(([id, j]) => snap[t].set(id, j));
+      }
+    }
+    for (const t of [...SYNC_TABLES].reverse()) {
+      const live = new Set(db[t].map((o) => o.id));
+      const dels = [...snap[t].keys()].filter((id) => !live.has(id));
+      for (const part of chunks(dels, 200)) {
+        const { error } = await sb.from(t).delete().in("id", part);
+        if (error) throw error;
+        part.forEach((id) => snap[t].delete(id));
+      }
+    }
+    const newMoves = db.movements.filter((m) => !snap.movements.has(m.id)).reverse();
+    for (const part of chunks(newMoves, 400)) {
+      const { error } = await sb.from("movements").insert(part.map((m) => ({ id: m.id, data: m })));
+      if (error) throw error;
+      part.forEach((m) => snap.movements.add(m.id));
+    }
+    if (isAdmin()) {
+      const j = JSON.stringify(settingsForSync(db.settings));
+      if (j !== settingsSnap) {
+        const { error } = await sb.from("app_settings").upsert({ id: 1, data: JSON.parse(j) });
+        if (error) throw error;
+        settingsSnap = j;
+      }
+    }
+    setSyncState("saved");
+  } catch (err) {
+    if (isNetworkError(err)) {
+      setSyncState("offline");
+      retryTimer = setTimeout(queueSync, 8000);
+      return;
+    }
+    toast(friendlyError(err) + " — تم تحديث البيانات من الخادم", "error");
+    closeModal();
+    await reloadCloud();
+  }
+}
+
+// تحقق من الخادم مباشرة أن السيارة ما زالت متاحة (يمنع بيع/حجز سيارة غيّرها موظف آخر للتو)
+async function stillAvailable(carId, allowed = ["available", "reserved"]) {
+  if (!CLOUD) return true;
+  const { data, error } = await sb.from("cars").select("data").eq("id", carId).maybeSingle();
+  if (error) throw error;
+  if (!data || !allowed.includes(data.data.status)) {
+    toast("حالة السيارة تغيّرت من موظف آخر — تم تحديث البيانات", "error");
+    closeModal();
+    await reloadCloud();
+    return false;
+  }
+  return true;
+}
+
+async function replaceCloudData(data) {
+  await syncChain;
+  setSyncState("saving");
+  const { error } = await sb.rpc("wipe_inventory");
+  if (error) throw error;
+  for (const t of ["suppliers", "cars", "expenses", "sales", "movements"]) {
+    const rows = (Array.isArray(data[t]) ? data[t] : []).map((o) => ({ id: o.id || uid(), data: o }));
+    for (const part of chunks(rows, 400)) {
+      const { error: e } = await sb.from(t).insert(part);
+      if (e) throw e;
+    }
+  }
+  const st = settingsForSync({ ...defaultDB().settings, ...(data.settings || {}) });
+  const r1 = await sb.from("app_settings").upsert({ id: 1, data: st });
+  if (r1.error) throw r1.error;
+  const r2 = await sb.rpc("sync_counters");
+  if (r2.error) throw r2.error;
+  await reloadCloud();
+}
+
+/* ---------- التحديث اللحظي ---------- */
+let renderTimer = null;
+function renderNow() {
+  if (!me && CLOUD) return;
+  PAGES[currentPage].render();
+  renderChrome();
+  if ($("#drawerOverlay").classList.contains("open") && !$("#modalOverlay").classList.contains("open")) {
+    if (drawerCarId && carById(drawerCarId)) {
+      const body = $("#drawer .modal-body");
+      const top = body ? body.scrollTop : 0;
+      openCar(drawerCarId);
+      const nb = $("#drawer .modal-body");
+      if (nb) nb.scrollTop = top;
+    } else closeDrawer();
+  }
+}
+function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(renderNow, 150); }
+
+function onRealtime(p) {
+  const t = p.table;
+  if (t === "profiles") {
+    const row = p.new && p.new.id ? p.new : null;
+    if (row) {
+      const i = profiles.findIndex((x) => x.id === row.id);
+      if (i >= 0) profiles[i] = row; else profiles.push(row);
+      if (me && row.id === me.id) {
+        me = row;
+        db.settings.currentUser = me.full_name || me.email;
+        if (!me.active) { teardown(); showAuth("inactive", "تم إيقاف حسابك من المدير."); return; }
+        applyRole();
+      }
+    }
+    return scheduleRender();
+  }
+  if (t === "app_settings") {
+    if (p.new && p.new.data && JSON.stringify(settingsForSync(db.settings)) === settingsSnap) {
+      db.settings = { ...defaultDB().settings, ...settingsForSync(p.new.data), currentUser: db.settings.currentUser };
+      settingsSnap = JSON.stringify(settingsForSync(db.settings));
+      scheduleRender();
+    }
+    return;
+  }
+  if (t === "movements") {
+    if (p.eventType === "INSERT" && p.new && !snap.movements.has(p.new.id) && !db.movements.some((m) => m.id === p.new.id)) {
+      snap.movements.add(p.new.id);
+      db.movements.unshift({ ...p.new.data, id: p.new.id, ts: p.new.data.ts || p.new.created_at });
+      scheduleRender();
+    }
+    return;
+  }
+  if (!SYNC_TABLES.includes(t)) return;
+  if (p.eventType === "DELETE") {
+    const id = p.old && p.old.id;
+    if (!id || !snap[t].has(id)) return;
+    const local = db[t].find((o) => o.id === id);
+    if (local && JSON.stringify(local) !== snap[t].get(id)) return; // لدينا تعديل محلي لم يُحفظ بعد
+    db[t] = db[t].filter((o) => o.id !== id);
+    snap[t].delete(id);
+  } else {
+    const id = p.new.id;
+    const rec = { ...p.new.data, id };
+    const local = db[t].find((o) => o.id === id);
+    if (local) {
+      if (JSON.stringify(local) !== snap[t].get(id)) return;
+      Object.keys(local).forEach((k) => delete local[k]);
+      Object.assign(local, rec);
+      snap[t].set(id, JSON.stringify(local));
+    } else {
+      db[t].push(rec);
+      snap[t].set(id, JSON.stringify(rec));
+    }
+  }
+  scheduleRender();
+}
+
+function subscribe() {
+  if (channel) sb.removeChannel(channel);
+  channel = sb.channel("rowaad-inventory")
+    .on("postgres_changes", { event: "*", schema: "public" }, onRealtime)
+    .subscribe((status) => { if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setSyncState("offline"); });
+}
+
+/* ---------- تسجيل الدخول ---------- */
+function showAuth(state, msg) {
+  $("#authScreen").classList.remove("hidden");
+  ["authLoading", "loginForm", "authInactive", "authError"].forEach((id) => $(`#${id}`).classList.add("hidden"));
+  const map = { loading: "authLoading", login: "loginForm", inactive: "authInactive", error: "authError" };
+  $(`#${map[state]}`).classList.remove("hidden");
+  if (state === "login") { const m = $("#loginMsg"); m.textContent = msg || ""; m.className = "auth-msg"; setTimeout(() => $("#loginForm").email.focus(), 50); }
+  if (state === "inactive" && msg) $("#inactiveMsg").textContent = msg;
+  if (state === "error") $("#authErrorMsg").textContent = msg || "";
+}
+function hideAuth() { $("#authScreen").classList.add("hidden"); }
+
+function applyRole() {
+  document.body.classList.toggle("is-admin", isAdmin());
+  if (PAGES[currentPage].admin && !isAdmin()) go("dashboard");
+}
+
+function teardown() {
+  if (channel) { sb.removeChannel(channel); channel = null; }
+  clearTimeout(retryTimer);
+  me = null; profiles = []; snap = {}; db = defaultDB();
+  document.body.classList.remove("is-admin");
+  closeModal(); closeDrawer();
+}
+
+async function startSession(user) {
+  showAuth("loading");
+  try {
+    const { data: prof, error } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
+    if (error) throw error;
+    if (!prof || !prof.active) { showAuth("inactive"); return; }
+    me = prof;
+    await loadCloud();
+    subscribe();
+    hideAuth();
+    applyRole();
+    setSyncState("saved");
+    go(location.hash.slice(1) || "dashboard");
+    renderChrome();
+    if (isAdmin() && !db.cars.length && !db.sales.length) setTimeout(() => toast("قاعدة البيانات فارغة — ابدأ بإضافة السيارات، أو حمّل بيانات تجريبية من الإعدادات", "warn"), 400);
+  } catch (err) {
+    me = null;
+    showAuth("error", friendlyError(err));
+  }
+}
+
+async function bootCloud() {
+  showAuth("loading");
+  sb.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") setTimeout(() => passwordForm(true), 600);
+    if (event === "SIGNED_OUT") { teardown(); showAuth("login"); }
+  });
+  try {
+    const { data } = await sb.auth.getSession();
+    if (data && data.session) await startSession(data.session.user);
+    else showAuth("login");
+  } catch (err) {
+    showAuth("error", friendlyError(err));
+  }
+}
+
+async function logout() {
+  await syncChain;
+  await sb.auth.signOut();
+  teardown();
+  showAuth("login");
+}
+
+$("#loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const email = f.email.value.trim(), password = f.password.value;
+  const msg = $("#loginMsg");
+  if (!email || !password) { msg.textContent = "أدخل البريد الإلكتروني وكلمة المرور"; return; }
+  const btn = $("button[type=submit]", f);
+  btn.disabled = true; msg.textContent = "";
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  btn.disabled = false;
+  if (error) { msg.className = "auth-msg"; msg.textContent = friendlyError(error); return; }
+  f.password.value = "";
+  await startSession(data.user);
+});
+
+$("#forgotBtn").addEventListener("click", async () => {
+  const f = $("#loginForm"), msg = $("#loginMsg");
+  const email = f.email.value.trim();
+  if (!email) { msg.className = "auth-msg"; msg.textContent = "اكتب بريدك الإلكتروني أولًا ثم اضغط \"نسيت كلمة المرور\""; f.email.focus(); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: appUrl() });
+  msg.className = error ? "auth-msg" : "auth-msg ok";
+  msg.textContent = error ? friendlyError(error) : "إذا كان البريد مسجلًا، سيصلك رابط لتعيين كلمة مرور جديدة";
+});
+
+/* ---------- حسابي ---------- */
+function accountMenu() {
+  if (!me) return;
+  modal({
+    title: "حسابي", size: "sm", submit: "تغيير كلمة المرور",
+    body: `<div class="spec-grid">
+        <div class="spec"><span>الاسم</span><b>${esc(me.full_name || "—")}</b></div>
+        <div class="spec"><span>الصلاحية</span><b>${me.role === "admin" ? "مدير" : "موظف"}</b></div>
+        <div class="spec" style="grid-column:1/-1"><span>البريد الإلكتروني</span><b dir="ltr" style="display:block;text-align:right">${esc(me.email || "")}</b></div>
+      </div>
+      <button class="btn btn-danger btn-block" type="button" data-action="logout" style="margin-top:16px">تسجيل الخروج</button>`,
+    onSubmit: () => { setTimeout(() => passwordForm(false), 60); },
+  });
+}
+
+function passwordForm(recovery) {
+  if (!CLOUD) return;
+  modal({
+    title: recovery ? "تعيين كلمة مرور جديدة" : "تغيير كلمة المرور", size: "sm", submit: "حفظ كلمة المرور",
+    body: `<div class="form-grid cols-2">
+      ${field(req("كلمة المرور الجديدة"), `<input class="input" type="password" name="p1" dir="ltr" autocomplete="new-password" required>`, "span-2", "8 أحرف على الأقل")}
+      ${field(req("تأكيد كلمة المرور"), `<input class="input" type="password" name="p2" dir="ltr" autocomplete="new-password" required>`, "span-2")}
+    </div>`,
+    onSubmit: async (d) => {
+      if (d.p1.length < 8) { toast("كلمة المرور يجب أن تكون 8 أحرف على الأقل", "error"); return false; }
+      if (d.p1 !== d.p2) { toast("كلمتا المرور غير متطابقتين", "error"); return false; }
+      const { error } = await sb.auth.updateUser({ password: d.p1 });
+      if (error) throw error;
+      toast("تم تغيير كلمة المرور");
+    },
+  });
+}
+
+/* ---------- الموظفون ---------- */
+function renderUsers() {
+  if (!CLOUD) return;
+  const salesBy = {};
+  db.sales.forEach((s) => (salesBy[s.seller] = (salesBy[s.seller] || 0) + 1));
+  const list = [...profiles].sort((a, b) => (a.active === b.active ? a.created_at.localeCompare(b.created_at) : a.active ? 1 : -1));
+  $("#usersBody").innerHTML = list.map((p) => `
+    <tr>
+      <td><div class="car-cell"><b>${esc(p.full_name || "—")}</b><small>${me && p.id === me.id ? "أنت" : ""}</small></div></td>
+      <td class="mono" dir="ltr" style="text-align:right">${esc(p.email || "")}</td>
+      <td><span class="badge no-dot ${p.role === "admin" ? "tone-gold" : "tone-blue"}">${p.role === "admin" ? "مدير" : "موظف"}</span></td>
+      <td>${p.active ? '<span class="badge st-available">مفعّل</span>' : '<span class="badge st-reserved">موقوف / بانتظار التفعيل</span>'}</td>
+      <td>${fmtDate((p.created_at || "").slice(0, 10))}</td>
+      <td class="num">${salesBy[p.full_name] || 0}</td>
+      <td class="actions" style="display:flex;gap:2px">
+        <button class="btn-icon" title="تعديل الصلاحية" data-action="edit-user" data-id="${p.id}">${icon("edit")}</button>
+        <button class="btn-icon" title="إرسال رابط تعيين كلمة المرور" data-action="reset-user-password" data-id="${p.id}">${icon("lock")}</button>
+      </td>
+    </tr>`).join("") || `<tr><td colspan="7"><div class="empty">لا يوجد موظفون</div></td></tr>`;
+}
+
+function userForm(id) {
+  const p = profiles.find((x) => x.id === id);
+  if (!p) return;
+  modal({
+    title: `تعديل ${esc(p.full_name || p.email)}`, size: "sm",
+    body: `<div class="form-grid cols-2">
+      ${field(req("الاسم"), `<input class="input" name="full_name" required value="${esc(p.full_name)}">`, "span-2", "يظهر في سجل الحركات وفواتير البيع")}
+      ${field("الصلاحية", `<select class="select" name="role">${opts([["staff", "موظف"], ["admin", "مدير"]], p.role)}</select>`)}
+      ${field("الحالة", `<select class="select" name="active">${opts([["1", "مفعّل"], ["0", "موقوف"]], p.active ? "1" : "0")}</select>`)}
+    </div>
+    ${p.id === me.id ? '<p class="muted" style="font-size:.8rem;margin-top:12px">تنبيه: هذا حسابك — لو ألغيت صلاحية المدير ستفقد الوصول لهذه الصفحة.</p>' : ""}`,
+    onSubmit: async (d) => {
+      const { data, error } = await sb.from("profiles").update({ full_name: d.full_name.trim(), role: d.role, active: d.active === "1" }).eq("id", id).select().single();
+      if (error) throw error;
+      Object.assign(p, data);
+      if (p.id === me.id) { me = { ...p }; db.settings.currentUser = me.full_name; applyRole(); }
+      toast("تم حفظ بيانات الموظف");
+      renderNow();
+    },
+  });
+}
+
+function addUserForm() {
+  modal({
+    title: "إضافة موظف جديد", size: "sm", submit: "إنشاء الحساب",
+    body: `<div class="form-grid cols-2">
+      ${field(req("اسم الموظف"), `<input class="input" name="name" required>`, "span-2")}
+      ${field(req("البريد الإلكتروني"), `<input class="input" type="email" name="email" dir="ltr" required>`, "span-2", "يستخدمه الموظف لتسجيل الدخول")}
+      ${field(req("كلمة مرور مبدئية"), `<input class="input" type="text" name="password" dir="ltr" required autocomplete="off">`, "", "8 أحرف على الأقل — أعطها للموظف وليغيّرها")}
+      ${field("الصلاحية", `<select class="select" name="role">${opts([["staff", "موظف"], ["admin", "مدير"]], "staff")}</select>`)}
+    </div>`,
+    onSubmit: async (d) => {
+      const email = d.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("البريد الإلكتروني غير صحيح", "error"); return false; }
+      if (d.password.length < 8) { toast("كلمة المرور يجب أن تكون 8 أحرف على الأقل", "error"); return false; }
+      // عميل منفصل لا يحفظ الجلسة، حتى لا يخرج المدير من حسابه
+      const tmp = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "rowaad-signup-" + uid() } });
+      const { data, error } = await tmp.auth.signUp({ email, password: d.password, options: { data: { full_name: d.name.trim() }, emailRedirectTo: appUrl() } });
+      if (error) throw error;
+      if (!data.user || (Array.isArray(data.user.identities) && data.user.identities.length === 0)) { toast("هذا البريد مسجل مسبقًا", "error"); return false; }
+      const upd = await sb.from("profiles").update({ full_name: d.name.trim(), role: d.role, active: true }).eq("id", data.user.id).select().single();
+      if (upd.error) throw upd.error;
+      const i = profiles.findIndex((x) => x.id === upd.data.id);
+      if (i >= 0) profiles[i] = upd.data; else profiles.push(upd.data);
+      toast(data.session ? "تم إنشاء حساب الموظف — يقدر يدخل الآن" : "تم إنشاء الحساب — سيصل للموظف بريد تأكيد قبل أول دخول");
+      renderNow();
+    },
+  });
+}
+
 /* ---------------- واجهة: تنقل ---------------- */
 const PAGES = {
   dashboard: { title: "لوحة التحكم", render: renderDashboard },
@@ -365,12 +835,13 @@ const PAGES = {
   movements: { title: "سجل الحركات", render: renderMovements },
   suppliers: { title: "الموردون", render: renderSuppliers },
   reports: { title: "التقارير", render: renderReports },
-  settings: { title: "الإعدادات", render: renderSettings },
+  users: { title: "الموظفون", render: renderUsers, admin: true },
+  settings: { title: "الإعدادات", render: renderSettings, admin: true },
 };
 let currentPage = "dashboard";
 
 function go(page) {
-  if (!PAGES[page]) page = "dashboard";
+  if (!PAGES[page] || (PAGES[page].admin && !isAdmin()) || (page === "users" && !CLOUD)) page = "dashboard";
   currentPage = page;
   $$(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
   $$(".page").forEach((p) => p.classList.toggle("active", p.id === `page-${page}`));
@@ -388,13 +859,16 @@ function refresh() {
 }
 
 function renderChrome() {
-  const u = db.settings.currentUser || "—";
+  const u = (CLOUD && me ? me.full_name || me.email : db.settings.currentUser) || "—";
   $("#userName").textContent = u;
   $("#userAvatar").textContent = u.trim().charAt(0) || "؟";
   const n = getAlerts().length;
   const b = $("#agingBadge");
   b.textContent = n;
   b.classList.toggle("hidden", n === 0);
+  const pending = CLOUD ? profiles.filter((p) => !p.active).length : 0;
+  $("#pendingBadge").textContent = pending;
+  $("#pendingBadge").classList.toggle("hidden", !pending);
 }
 
 function closeSidebar() { $("#sidebar").classList.remove("open"); $("#scrim").classList.remove("open"); }
@@ -582,9 +1056,11 @@ function fillSelect(sel, items, allLabel, value) {
 }
 
 /* ---------------- تفاصيل السيارة ---------------- */
+let drawerCarId = null;
 function openCar(id) {
   const c = carById(id);
   if (!c) return;
+  drawerCarId = id;
   const tc = totalCost(c);
   const exps = db.expenses.filter((e) => e.carId === id).sort((a, b) => b.date.localeCompare(a.date));
   const sale = saleByCar(id);
@@ -652,7 +1128,7 @@ function openCar(id) {
         <div class="section-h">السجل الزمني</div>
         <div class="timeline">${moves.map((m) => `<div class="tl-item"><b>${(MOVE[m.type] || MOVE.edit).label}</b> — ${esc(m.detail)}${m.amount ? ` <span class="num">(${moneyTxt(m.amount)})</span>` : ""}<small>${fmtDateTime(m.ts)} · ${esc(m.user)}</small></div>`).join("") || '<p class="muted">لا يوجد</p>'}</div>
 
-        ${c.status !== "sold" ? `<div style="margin-top:24px"><button class="btn btn-danger btn-sm" data-action="delete-car" data-id="${id}">${icon("trash")}حذف السيارة نهائيًا</button></div>` : ""}
+        ${c.status !== "sold" ? `<div style="margin-top:24px" class="admin-only"><button class="btn btn-danger btn-sm" data-action="delete-car" data-id="${id}">${icon("trash")}حذف السيارة نهائيًا</button></div>` : ""}
       </div>
     </div>`;
   openOverlay("drawerOverlay");
@@ -677,7 +1153,7 @@ function modal({ title, body, submit = "حفظ", size = "", onSubmit, onInput, d
       </div>
     </form>`;
   const form = $("#mform");
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
     $$(".field.invalid", form).forEach((f) => f.classList.remove("invalid"));
@@ -688,15 +1164,23 @@ function modal({ title, body, submit = "حفظ", size = "", onSubmit, onInput, d
       toast("يرجى تعبئة الحقول المطلوبة", "error");
       return;
     }
-    if (onSubmit(data, form) !== false) closeModal();
+    const btn = $("button[type=submit]", form);
+    btn.disabled = true;
+    try {
+      if ((await onSubmit(data, form)) !== false) closeModal();
+    } catch (err) {
+      toast(friendlyError(err), "error");
+    } finally {
+      btn.disabled = false;
+    }
   });
   if (onInput) { form.addEventListener("input", () => onInput(form)); form.addEventListener("change", () => onInput(form)); onInput(form); }
   openOverlay("modalOverlay");
-  setTimeout(() => { const f = $("input:not([type=hidden]), select", form); if (f && window.innerWidth > 700) f.focus(); }, 50);
+  setTimeout(() => { const f = $("input:not([type=hidden]), select", form); if (f && window.innerWidth > 700 && !form.contains(document.activeElement)) f.focus(); }, 50);
 }
 
 function confirmBox(title, message, onOk, okLabel = "تأكيد") {
-  modal({ title, size: "sm", danger: true, submit: okLabel, body: `<p>${message}</p>`, onSubmit: () => { onOk(); } });
+  modal({ title, size: "sm", danger: true, submit: okLabel, body: `<p>${message}</p>`, onSubmit: async () => { await onOk(); } });
 }
 
 const field = (label, input, cls = "", hint = "") => `<div class="field ${cls}"><label>${label}</label>${input}${hint ? `<span class="hint">${hint}</span>` : ""}</div>`;
@@ -747,7 +1231,7 @@ function carForm(id) {
       const m = marginPct(price, cost);
       $("#marginPreview").innerHTML = price ? `الهامش: <b class="${m < 0 ? "profit-neg" : m < db.settings.minMargin ? "age-warn" : "profit-pos"} num">${moneyTxt(price - cost)} (${pct(m)})</b>` : '<span class="muted">الهامش يظهر هنا</span>';
     },
-    onSubmit: (d, form) => {
+    onSubmit: async (d, form) => {
       d.vin = (d.vin || "").trim().toUpperCase();
       if (d.vin && d.vin.length !== 17) { form.vin.closest(".field").classList.add("invalid"); toast("رقم الهيكل يجب أن يكون 17 خانة", "error"); return false; }
       if (d.vin && db.cars.some((x) => x.vin === d.vin && x.id !== id)) { form.vin.closest(".field").classList.add("invalid"); toast("رقم الهيكل مسجل مسبقًا لسيارة أخرى", "error"); return false; }
@@ -770,7 +1254,7 @@ function carForm(id) {
         refresh();
         openCar(c.id);
       } else {
-        const car = { id: uid(), stockNo: nextStockNo(), ...clean, status: d.status || "available", reservation: null, createdAt: today(), soldDate: null };
+        const car = { id: uid(), stockNo: await nextStockNo(), ...clean, status: d.status || "available", reservation: null, createdAt: today(), soldDate: null };
         if (car.status === "maintenance") car.maintenanceSince = today();
         db.cars.push(car);
         const sup = supplierById(car.supplierId);
@@ -785,6 +1269,8 @@ function carForm(id) {
 /* ---------- نموذج البيع ---------- */
 function sellForm(id) {
   const sellable = db.cars.filter((c) => c.status === "available" || c.status === "reserved");
+  const sellers = [...new Set([...db.settings.sellers, ...(CLOUD ? profiles.filter((p) => p.active).map((p) => p.full_name).filter(Boolean) : [])])];
+  const meName = CLOUD && me ? me.full_name : db.settings.currentUser;
   if (!sellable.length) { toast("لا توجد سيارات متاحة للبيع", "warn"); return; }
   const c = id ? carById(id) : null;
   const vat = num(db.settings.vatRate);
@@ -810,7 +1296,7 @@ function sellForm(id) {
         ${field("طريقة الدفع", `<select class="select" name="paymentMethod">${opts(Object.entries(PAYMENT), "cash")}</select>`)}
         ${field("جهة التمويل", `<select class="select" name="bank">${opts(BANKS, "", "—")}</select>`, "bank-field")}
         ${field("الدفعة المقدمة", `<input class="input" type="number" min="0" step="100" name="downPayment" value="${c && c.reservation ? esc(c.reservation.deposit) : 0}">`, "bank-field", c && c.reservation ? "يشمل عربون الحجز" : "")}
-        ${field("البائع", `<select class="select" name="seller">${opts(db.settings.sellers, db.settings.sellers.includes(db.settings.currentUser) ? db.settings.currentUser : db.settings.sellers[0])}</select>`)}
+        ${field("البائع", `<select class="select" name="seller">${opts(sellers, sellers.includes(meName) ? meName : sellers[0])}</select>`)}
         ${field("ملاحظات", `<input class="input" name="note">`, "span-2")}
       </div>
       <div id="saleSummary"></div>`,
@@ -834,12 +1320,13 @@ function sellForm(id) {
           <div class="summary-row"><span>صافي الربح</span><b class="num ${price - tc >= 0 ? "profit-pos" : "profit-neg"}">${moneyTxt(price - tc)} (${pct(marginPct(price, tc))})</b></div>
         </div>`;
     },
-    onSubmit: (d) => {
+    onSubmit: async (d) => {
       const car = carById(d.carId);
-      if (!car || !["available", "reserved"].includes(car.status)) { toast("السيارة غير متاحة للبيع", "error"); return false; }
+      if (!car || !["available", "reserved"].includes(car.status)) { toast("السيارة لم تعد متاحة — حالتها تغيّرت (ربما بيعت من موظف آخر)", "error"); closeModal(); return false; }
+      if (!(await stillAvailable(car.id))) return false;
       const finance = ["finance", "installment"].includes(d.paymentMethod);
       const sale = {
-        id: uid(), carId: car.id, invoiceNo: nextInvoiceNo(), date: d.date, price: num(d.price), vatRate: vat,
+        id: uid(), carId: car.id, invoiceNo: await nextInvoiceNo(), date: d.date, price: num(d.price), vatRate: vat,
         paymentMethod: d.paymentMethod, bank: finance ? d.bank : "", downPayment: finance ? num(d.downPayment) : 0,
         customer: { name: d.customer.trim(), phone: d.phone.trim(), idNo: (d.idNo || "").trim() },
         seller: d.seller, note: (d.note || "").trim(),
@@ -869,7 +1356,8 @@ function reserveForm(id) {
       ${field(req("الحجز ساري حتى"), `<input class="input" type="date" name="until" required value="${addDays(today(), 3)}">`)}
       ${field("ملاحظة", `<input class="input" name="note">`)}
     </div>`,
-    onSubmit: (d) => {
+    onSubmit: async (d) => {
+      if (!(await stillAvailable(c.id, ["available"]))) return false;
       c.status = "reserved";
       c.reservation = { customer: d.customer.trim(), phone: d.phone.trim(), deposit: num(d.deposit), until: d.until, date: today(), note: d.note.trim() };
       logMove("reserve", c, `حجز باسم ${c.reservation.customer} حتى ${fmtDate(d.until)}`, c.reservation.deposit || null);
@@ -994,7 +1482,7 @@ function renderSales() {
       <td class="num ${profit >= 0 ? "profit-pos" : "profit-neg"}">${fmt(profit)}</td>
       <td class="actions" style="display:flex;gap:2px">
         <button class="btn-icon" title="طباعة الفاتورة" data-action="invoice" data-id="${s.id}">${icon("print")}</button>
-        <button class="btn-icon" title="إلغاء البيع (مرتجع)" data-action="cancel-sale" data-id="${s.id}">${icon("undo")}</button>
+        <button class="btn-icon admin-only" title="إلغاء البيع (مرتجع)" data-action="cancel-sale" data-id="${s.id}">${icon("undo")}</button>
       </td>
     </tr>`).join("") : `<tr><td colspan="10"><div class="empty">${icon("money")}<div>لا توجد مبيعات في هذه الفترة</div></div></td></tr>`;
 }
@@ -1023,7 +1511,7 @@ function renderExpenses() {
       <td class="muted">${esc(e.note || "—")}</td>
       <td class="num"><b>${fmt(e.amount)}</b></td>
       <td>${esc(e.user || "—")}</td>
-      <td class="actions">${c && c.status !== "sold" ? `<button class="btn-icon" title="حذف" data-action="delete-expense" data-id="${e.id}">${icon("trash")}</button>` : ""}</td>
+      <td class="actions">${c && c.status !== "sold" ? `<button class="btn-icon admin-only" title="حذف" data-action="delete-expense" data-id="${e.id}">${icon("trash")}</button>` : ""}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="7"><div class="empty">${icon("tool")}<div>لا توجد مصاريف مسجلة</div></div></td></tr>`;
 }
@@ -1064,7 +1552,7 @@ function renderSuppliers() {
       <td class="num">${inStock}</td>
       <td class="actions" style="display:flex;gap:2px">
         <button class="btn-icon" title="تعديل" data-action="edit-supplier" data-id="${s.id}">${icon("edit")}</button>
-        <button class="btn-icon" title="حذف" data-action="delete-supplier" data-id="${s.id}">${icon("trash")}</button>
+        <button class="btn-icon admin-only" title="حذف" data-action="delete-supplier" data-id="${s.id}">${icon("trash")}</button>
       </td>
     </tr>`;
   }).join("") : `<tr><td colspan="8"><div class="empty">لا يوجد موردون — أضف أول مورد</div></td></tr>`;
@@ -1103,10 +1591,11 @@ function renderReports() {
 function renderSettings() {
   const f = $("#settingsForm");
   ["companyName", "vatNumber", "crNumber", "vatRate", "agingDays", "minMargin", "currentUser", "address"].forEach((k) => (f[k].value = db.settings[k] ?? ""));
+  if (CLOUD && me) f.currentUser.value = me.full_name || "";
   $("#branchTags").innerHTML = db.settings.branches.map((b) => `<span class="tag">${esc(b)}<button title="حذف" data-action="remove-branch" data-id="${esc(b)}">×</button></span>`).join("");
   $("#sellerTags").innerHTML = db.settings.sellers.map((b) => `<span class="tag">${esc(b)}<button title="حذف" data-action="remove-seller" data-id="${esc(b)}">×</button></span>`).join("");
   const size = new Blob([JSON.stringify(db)]).size;
-  $("#storageInfo").textContent = `${db.cars.length} سيارة · ${db.sales.length} فاتورة · ${db.movements.length} حركة · حجم البيانات ${(size / 1024).toFixed(0)} KB`;
+  $("#storageInfo").textContent = `${CLOUD ? "قاعدة البيانات: " : ""}${db.cars.length} سيارة · ${db.sales.length} فاتورة · ${db.movements.length} حركة · حجم البيانات ${(size / 1024).toFixed(0)} KB`;
 }
 
 /* ---------------- طباعة ---------------- */
@@ -1287,8 +1776,30 @@ const ACTIONS = {
   },
   "remove-seller": (name) => { db.settings.sellers = db.settings.sellers.filter((b) => b !== name); refresh(); },
   backup: () => { downloadFile(`نسخة-احتياطية-مخزون-${today()}.json`, JSON.stringify(db, null, 1), "application/json"); toast("تم تحميل النسخة الاحتياطية"); },
-  demo: () => confirmBox("تحميل بيانات تجريبية", "سيتم <b>استبدال كل البيانات الحالية</b> ببيانات تجريبية. خذ نسخة احتياطية أولًا إذا كانت لديك بيانات حقيقية.", () => { db = seedDemoWithTimes(); toast("تم تحميل البيانات التجريبية"); refresh(); }, "استبدال البيانات"),
-  wipe: () => confirmBox("مسح كل البيانات", "سيتم مسح <b>كل السيارات والمبيعات والمصاريف والحركات</b> نهائيًا مع الإبقاء على الإعدادات. لا يمكن التراجع.", () => { const s = db.settings; db = defaultDB(); db.settings = s; toast("تم مسح البيانات", "warn"); refresh(); }, "مسح نهائي"),
+  demo: () => confirmBox("تحميل بيانات تجريبية", `سيتم <b>استبدال كل البيانات الحالية</b> ببيانات تجريبية${CLOUD ? " <b>لكل الموظفين</b>" : ""}. خذ نسخة احتياطية أولًا إذا كانت لديك بيانات حقيقية.`, async () => {
+    const demo = seedDemoWithTimes();
+    if (CLOUD) { demo.settings = { ...db.settings, branches: demo.settings.branches, sellers: demo.settings.sellers }; await replaceCloudData(demo); }
+    else { db = demo; refresh(); }
+    toast("تم تحميل البيانات التجريبية");
+  }, "استبدال البيانات"),
+  wipe: () => confirmBox("مسح كل البيانات", `سيتم مسح <b>كل السيارات والمبيعات والمصاريف والحركات</b> نهائيًا${CLOUD ? " من قاعدة البيانات لكل الموظفين" : ""} مع الإبقاء على الإعدادات. لا يمكن التراجع.`, async () => {
+    if (CLOUD) { await syncChain; const { error } = await sb.rpc("wipe_inventory"); if (error) throw error; await reloadCloud(); }
+    else { const s = db.settings; db = defaultDB(); db.settings = s; refresh(); }
+    toast("تم مسح البيانات", "warn");
+  }, "مسح نهائي"),
+  logout: () => logout(),
+  account: () => accountMenu(),
+  "change-password": () => passwordForm(false),
+  "add-user": () => addUserForm(),
+  "edit-user": (id) => userForm(id),
+  "reset-user-password": (id) => {
+    const p = profiles.find((x) => x.id === id);
+    confirmBox("إعادة تعيين كلمة المرور", `سيتم إرسال رابط لتعيين كلمة مرور جديدة إلى <b dir="ltr">${esc(p.email)}</b>.`, async () => {
+      const { error } = await sb.auth.resetPasswordForEmail(p.email, { redirectTo: appUrl() });
+      if (error) throw error;
+      toast("تم إرسال الرابط إلى بريد الموظف");
+    }, "إرسال الرابط");
+  },
 };
 
 document.addEventListener("click", (e) => {
@@ -1299,7 +1810,14 @@ document.addEventListener("click", (e) => {
   if (t.id === "drawerOverlay") return closeDrawer();
 
   const act = t.closest("[data-action]");
-  if (act) { e.preventDefault(); e.stopPropagation(); const fn = ACTIONS[act.dataset.action]; if (fn) fn(act.dataset.id); return; }
+  if (act) {
+    e.preventDefault(); e.stopPropagation();
+    const name = act.dataset.action;
+    if (ADMIN_ACTIONS.has(name) && !isAdmin()) return toast("هذه العملية متاحة للمدير فقط", "warn");
+    const fn = ACTIONS[name];
+    if (fn) Promise.resolve(fn(act.dataset.id)).catch((err) => toast(friendlyError(err), "error"));
+    return;
+  }
 
   const nav = t.closest("[data-page]");
   if (nav) return go(nav.dataset.page);
@@ -1342,23 +1860,26 @@ $("#movType").addEventListener("change", renderMovements);
 
 $("#settingsForm").addEventListener("submit", (e) => {
   e.preventDefault();
+  if (!isAdmin()) return toast("هذه العملية متاحة للمدير فقط", "warn");
   const d = Object.fromEntries(new FormData(e.target).entries());
   Object.assign(db.settings, {
     companyName: d.companyName.trim() || db.settings.companyName,
     vatNumber: d.vatNumber.trim(), crNumber: d.crNumber.trim(), address: d.address.trim(),
     vatRate: num(d.vatRate), agingDays: Math.max(1, num(d.agingDays) || 90), minMargin: num(d.minMargin),
-    currentUser: d.currentUser.trim() || "مدير النظام",
+    currentUser: CLOUD ? db.settings.currentUser : d.currentUser.trim() || "مدير النظام",
   });
   toast("تم حفظ الإعدادات"); refresh();
 });
 $("#branchForm").addEventListener("submit", (e) => {
   e.preventDefault();
+  if (!isAdmin()) return;
   const v = e.target.branch.value.trim();
   if (!v || db.settings.branches.includes(v)) return toast("الفرع موجود مسبقًا", "warn");
   db.settings.branches.push(v); e.target.reset(); refresh();
 });
 $("#sellerForm").addEventListener("submit", (e) => {
   e.preventDefault();
+  if (!isAdmin()) return;
   const v = e.target.seller.value.trim();
   if (!v || db.settings.sellers.includes(v)) return;
   db.settings.sellers.push(v); e.target.reset(); refresh();
@@ -1371,7 +1892,9 @@ $("#importFile").addEventListener("change", (e) => {
     try {
       const data = JSON.parse(reader.result);
       if (!data || !Array.isArray(data.cars) || !data.settings) throw new Error("bad");
-      confirmBox("استيراد نسخة احتياطية", `الملف يحتوي على <b>${data.cars.length}</b> سيارة و<b>${(data.sales || []).length}</b> فاتورة. سيتم استبدال البيانات الحالية بالكامل.`, () => {
+      if (!isAdmin()) throw new Error("admin");
+      confirmBox("استيراد نسخة احتياطية", `الملف يحتوي على <b>${data.cars.length}</b> سيارة و<b>${(data.sales || []).length}</b> فاتورة. سيتم استبدال البيانات الحالية بالكامل${CLOUD ? " لكل الموظفين" : ""}.`, async () => {
+        if (CLOUD) { await replaceCloudData(data); toast("تم استيراد البيانات بنجاح"); return; }
         const base = defaultDB();
         db = { ...base, ...data, settings: { ...base.settings, ...data.settings }, counters: { ...base.counters, ...data.counters } };
         ["suppliers", "expenses", "sales", "movements"].forEach((k) => { if (!Array.isArray(db[k])) db[k] = []; });
@@ -1387,12 +1910,23 @@ $("#importFile").addEventListener("change", (e) => {
 
 $("#menuBtn").addEventListener("click", () => { $("#sidebar").classList.add("open"); $("#scrim").classList.add("open"); });
 $("#scrim").addEventListener("click", closeSidebar);
-window.addEventListener("storage", (e) => { if (e.key === STORE_KEY) { db = load() || db; PAGES[currentPage].render(); renderChrome(); } });
+$("#userChip").addEventListener("click", () => (CLOUD ? accountMenu() : isAdmin() && go("settings")));
+window.addEventListener("storage", (e) => { if (!CLOUD && e.key === STORE_KEY) { db = load() || db; PAGES[currentPage].render(); renderChrome(); } });
 
 /* ---------------- تشغيل ---------------- */
-db = load();
-if (!db) { db = seedDemoWithTimes(); save(); setTimeout(() => toast("تم تحميل بيانات تجريبية للتجربة — امسحها من الإعدادات عند البدء الفعلي", "warn"), 400); }
-renderChrome();
-go(location.hash.slice(1) || "dashboard");
+document.body.classList.toggle("cloud", CLOUD);
+if (CLOUD_CONFIGURED && !CLOUD) {
+  db = defaultDB();
+  showAuth("error", "تعذّر تحميل مكتبة الاتصال بقاعدة البيانات. تأكد من اتصال الإنترنت ثم أعد المحاولة.");
+} else if (CLOUD) {
+  db = defaultDB();
+  bootCloud();
+} else {
+  document.body.classList.add("is-admin");
+  db = load();
+  if (!db) { db = seedDemoWithTimes(); save(); setTimeout(() => toast("تم تحميل بيانات تجريبية للتجربة — امسحها من الإعدادات عند البدء الفعلي", "warn"), 400); }
+  renderChrome();
+  go(location.hash.slice(1) || "dashboard");
+}
 
 })();

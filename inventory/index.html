@@ -31,7 +31,8 @@
       <div class="nav-label">الإدارة</div>
       <button class="nav-item" data-page="suppliers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>الموردون</button>
       <button class="nav-item" data-page="reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-6"/></svg>التقارير</button>
-      <button class="nav-item" data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>الإعدادات</button>
+      <button class="nav-item cloud-only admin-only" data-page="users"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>الموظفون<span class="badge-count hidden" id="pendingBadge"></span></button>
+      <button class="nav-item admin-only" data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>الإعدادات</button>
     </nav>
     <div class="sidebar-foot">
       <a href="../index.html">← العودة لموقع المعرض</a>
@@ -49,10 +50,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input type="search" id="globalSearch" placeholder="ابحث برقم المخزون، الهيكل، اللوحة أو الموديل…">
       </div>
-      <div class="user-chip" title="المستخدم الحالي (يُسجَّل في سجل الحركات)">
+      <span class="sync-pill cloud-only" id="syncStatus" title="حالة الحفظ في قاعدة البيانات"></span>
+      <button class="user-chip" id="userChip" title="حسابي">
         <span class="uname" id="userName">—</span>
         <span class="avatar" id="userAvatar">؟</span>
-      </div>
+      </button>
     </header>
 
     <div class="content">
@@ -272,6 +274,29 @@
         </div>
       </section>
 
+      <!-- ===== Users ===== -->
+      <section class="page" id="page-users">
+        <div class="page-head">
+          <div>
+            <h2>الموظفون والصلاحيات</h2>
+            <p>من يقدر يدخل النظام وماذا يستطيع أن يفعل</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" data-action="add-user"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>إضافة موظف</button>
+          </div>
+        </div>
+        <div class="alert info">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <div><b>المدير:</b> كل الصلاحيات، بما فيها الحذف وإلغاء البيع والإعدادات وإدارة الموظفين.<br><b>موظف:</b> يضيف ويعدّل السيارات، يحجز ويبيع، يسجل المصاريف وينقل بين الفروع — بدون حذف أو إلغاء بيع أو تعديل إعدادات.<br>أي حساب جديد يُنشأ من خارج هذه الصفحة يبقى <b>موقوفًا</b> حتى يفعّله المدير.</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الموظف</th><th>البريد الإلكتروني</th><th>الصلاحية</th><th>الحالة</th><th>تاريخ الإضافة</th><th>مبيعاته</th><th></th></tr></thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ===== Settings ===== -->
       <section class="page" id="page-settings">
         <div class="page-head">
@@ -282,7 +307,8 @@
         </div>
         <div class="alert info">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-          <div>البيانات محفوظة على هذا المتصفح فقط. خذ نسخة احتياطية بشكل دوري، واستخدم "استيراد" لنقل البيانات لجهاز آخر.</div>
+          <div class="local-only"><b>الوضع المحلي:</b> البيانات محفوظة على هذا المتصفح فقط لأن قاعدة البيانات لم تُربط بعد (ملف <span class="mono">inventory/config.js</span>). خذ نسخة احتياطية بشكل دوري.</div>
+          <div class="cloud-only"><b>متصل بقاعدة البيانات:</b> كل التغييرات تُحفظ فورًا وتظهر لكل الموظفين لحظيًا. النسخة الاحتياطية اختيارية للاحتفاظ بنسخة خارجية.</div>
         </div>
         <div class="settings-grid">
           <div class="card">
@@ -294,7 +320,7 @@
               <div class="field"><label>نسبة ضريبة القيمة المضافة (%)</label><input class="input" type="number" step="0.1" min="0" name="vatRate"></div>
               <div class="field"><label>تنبيه تقادم المخزون بعد (يوم)</label><input class="input" type="number" min="1" name="agingDays"></div>
               <div class="field"><label>الحد الأدنى لهامش الربح (%)</label><input class="input" type="number" step="0.5" min="0" name="minMargin"></div>
-              <div class="field"><label>اسم المستخدم الحالي</label><input class="input" name="currentUser"></div>
+              <div class="field local-only"><label>اسم المستخدم الحالي</label><input class="input" name="currentUser"></div>
               <div class="field span-2"><label>العنوان والهاتف (يظهر على الفاتورة)</label><input class="input" name="address"></div>
               <div class="field span-2"><button class="btn btn-primary" type="submit">حفظ الإعدادات</button></div>
             </form>
@@ -328,12 +354,39 @@
   </main>
 </div>
 
+<!-- Login -->
+<div class="auth-screen hidden" id="authScreen">
+  <div class="auth-card">
+    <div class="brand-logo auth-logo">ر</div>
+    <h1>رواد الاعتماد</h1>
+    <p class="muted">نظام إدارة المخزون — دخول الموظفين</p>
+    <div class="auth-state" id="authLoading"><div class="spinner"></div><p class="muted">جاري التحميل…</p></div>
+    <form class="auth-state hidden" id="loginForm" novalidate>
+      <div class="field"><label>البريد الإلكتروني</label><input class="input" type="email" name="email" dir="ltr" autocomplete="username" required></div>
+      <div class="field"><label>كلمة المرور</label><input class="input" type="password" name="password" dir="ltr" autocomplete="current-password" required></div>
+      <p class="auth-msg" id="loginMsg"></p>
+      <button class="btn btn-primary btn-block" type="submit">تسجيل الدخول</button>
+      <button class="link-btn" type="button" id="forgotBtn">نسيت كلمة المرور؟</button>
+    </form>
+    <div class="auth-state hidden" id="authInactive">
+      <div class="alert warn" style="text-align:right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div id="inactiveMsg">حسابك موقوف أو بانتظار تفعيل المدير. تواصل مع مدير النظام.</div></div>
+      <button class="btn btn-ghost btn-block" type="button" data-action="logout">تسجيل الخروج</button>
+    </div>
+    <div class="auth-state hidden" id="authError">
+      <div class="alert warn" style="text-align:right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div id="authErrorMsg"></div></div>
+      <button class="btn btn-ghost btn-block" type="button" onclick="location.reload()">إعادة المحاولة</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal & drawer containers -->
 <div class="overlay" id="modalOverlay"><div class="modal" id="modal"></div></div>
 <div class="overlay drawer-overlay" id="drawerOverlay"><div class="drawer" id="drawer"></div></div>
 <div class="toasts" id="toasts"></div>
 <div id="printArea"></div>
 
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="inventory.js"></script>
 </body>
 </html>

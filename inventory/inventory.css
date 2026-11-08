@@ -615,3 +615,36 @@ td.actions { width: 1%; }
 #modalOverlay { z-index: 110; }
 .grid-2 > *, .grid-2-eq > *, .settings-grid > *, .kpi-grid > * { min-width: 0; }
 .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); }
+
+/* ---------- Cloud / Auth ---------- */
+body:not(.is-admin) .admin-only { display: none !important; }
+body:not(.cloud) .cloud-only { display: none !important; }
+body.cloud .local-only { display: none !important; }
+.user-chip { cursor: pointer; color: var(--text); }
+.user-chip:hover { border-color: var(--gold); }
+.sync-pill { font-size: 0.76rem; font-weight: 700; padding: 4px 11px; border-radius: 20px; background: var(--success-soft); color: #6fd497; white-space: nowrap; }
+.sync-pill.saving { background: var(--warning-soft); color: #f2bc69; }
+.sync-pill.offline { background: var(--danger-soft); color: #ff8a85; }
+.auth-screen {
+  position: fixed; inset: 0; z-index: 300;
+  display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(circle at 70% 20%, rgba(212,164,55,0.12), transparent 50%), var(--bg);
+}
+.auth-card {
+  width: 100%; max-width: 400px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+  padding: 32px 28px; text-align: center; box-shadow: var(--shadow);
+}
+.auth-logo { width: 60px; height: 60px; font-size: 1.8rem; margin: 0 auto 14px; border-radius: 14px; }
+.auth-card h1 { font-size: 1.4rem; font-weight: 800; }
+.auth-card > p { margin-bottom: 22px; font-size: 0.9rem; }
+.auth-state { display: flex; flex-direction: column; gap: 14px; text-align: right; }
+.btn-block { width: 100%; padding: 11px; }
+.auth-msg { min-height: 1.2em; font-size: 0.85rem; color: #ff8a85; margin: -4px 0; }
+.auth-msg.ok { color: #6fd497; }
+.link-btn { background: none; border: none; color: var(--gold); cursor: pointer; font-size: 0.85rem; }
+.link-btn:hover { text-decoration: underline; }
+.spinner { width: 34px; height: 34px; margin: 10px auto 0; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--gold); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.auth-state.hidden { display: none; }
+@media (max-width: 560px) { .sync-pill { display: none; } }
