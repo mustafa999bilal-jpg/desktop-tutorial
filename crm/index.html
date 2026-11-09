@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>إدارة العملاء | رواد الاعتماد</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">ر</div>
+      <div>
+        <div class="brand-name">رواد الاعتماد</div>
+        <div class="brand-sub">نظام إدارة العملاء</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-label">العمل اليومي</div>
+      <button class="nav-item active" data-page="today"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>مهام اليوم<span class="badge-count hidden" id="todayBadge"></span></button>
+      <button class="nav-item" data-page="leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/></svg>العملاء</button>
+      <button class="nav-item" data-page="crm-reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-6"/></svg>التقارير</button>
+      <div class="nav-label admin-only">الإدارة</div>
+      <button class="nav-item cloud-only admin-only" data-page="users"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>الموظفون<span class="badge-count hidden" id="pendingBadge"></span></button>
+      <button class="nav-item admin-only" data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>الإعدادات</button>
+    </nav>
+    <div class="sidebar-foot">
+      <a href="../index.html">← العودة لموقع المعرض</a>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="btn-icon menu-btn" id="menuBtn" aria-label="القائمة"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <h1 id="pageTitle">مهام اليوم</h1>
+      <div class="spacer"></div>
+      <button class="btn btn-primary btn-sm topbar-add" data-action="lead-new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg><span>عميل جديد</span></button>
+      <span class="sync-pill cloud-only" id="syncStatus" title="حالة الحفظ في قاعدة البيانات"></span>
+      <button class="user-chip" id="userChip" title="حسابي">
+        <span class="uname" id="userName">—</span>
+        <span class="avatar" id="userAvatar">؟</span>
+      </button>
+    </header>
+
+    <div class="content">
+
+      <!-- ===== CRM: Today ===== -->
+      <section class="page active" id="page-today">
+        <div class="page-head">
+          <div>
+            <h2>مهام اليوم</h2>
+            <p>ابدأ من فوق لتحت: الجدد ← المتأخرين ← مواعيد اليوم</p>
+          </div>
+          <div class="page-actions">
+            <div class="chips" id="todayScope" style="margin:0"></div>
+          </div>
+        </div>
+        <div class="kpi-grid" id="todayKpis"></div>
+        <div id="todayBody"></div>
+      </section>
+
+      <!-- ===== CRM: Leads ===== -->
+      <section class="page" id="page-leads">
+        <div class="page-head">
+          <div>
+            <h2>العملاء</h2>
+            <p>كل عميل من أول رسالة حتى استلام السيارة</p>
+          </div>
+          <div class="page-actions">
+            <div class="view-toggle"><button data-action="lead-view" data-id="board">لوحة المراحل</button><button data-action="lead-view" data-id="table">جدول</button></div>
+            <button class="btn btn-ghost admin-only" data-action="lead-import" title="استيراد من ملف CSV مصدّر من Google Sheets">استيراد من الإكسل</button>
+            <input type="file" id="leadImportFile" accept=".csv,text/csv" hidden>
+            <button class="btn btn-ghost" data-action="lead-export">تصدير</button>
+            <button class="btn btn-ghost admin-only" data-action="lead-settings">إعدادات</button>
+            <button class="btn btn-primary" data-action="lead-new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>عميل جديد</button>
+          </div>
+        </div>
+        <div class="chips" id="leadChips"></div>
+        <div class="toolbar">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input class="input" type="search" id="lfSearch" placeholder="بحث بالاسم، الجوال، السيارة…">
+          </div>
+          <select class="select" id="lfAssignee"></select>
+          <select class="select" id="lfSource"></select>
+          <select class="select" id="lfTier"></select>
+          <select class="select" id="lfPeriod"></select>
+        </div>
+        <div id="leadsBody"></div>
+      </section>
+
+      <!-- ===== CRM: Reports ===== -->
+      <section class="page" id="page-crm-reports">
+        <div class="page-head">
+          <div>
+            <h2>تقارير العملاء</h2>
+            <p>أين يضيع العملاء؟ وأي مصدر وموظف يحقق أفضل نتيجة؟</p>
+          </div>
+          <div class="page-actions"><select class="select" id="crPeriod" style="width:auto"></select></div>
+        </div>
+        <div class="kpi-grid" id="crKpis"></div>
+        <div class="grid-2-eq">
+          <div class="card"><div class="card-head"><h3>قمع المبيعات</h3><span class="muted">كم عميل وصل لكل مرحلة</span></div><div class="hbar-list funnel" id="crFunnel"></div></div>
+          <div class="card"><div class="card-head"><h3>أسباب الإغلاق بدون بيع</h3><span class="muted">الأحمر = غير مؤهل</span></div><div class="hbar-list" id="crReasons"></div></div>
+        </div>
+        <div class="card" style="margin-bottom:16px"><div class="card-head"><h3>أداء مصادر الإعلانات</h3></div>
+          <div class="table-wrap" style="border:none"><table><thead><tr><th>المصدر</th><th>العملاء</th><th>المؤهلين</th><th>تم البيع</th><th>معدل التحويل</th></tr></thead><tbody id="crSources"></tbody></table></div></div>
+        <div class="card" style="margin-bottom:16px"><div class="card-head"><h3>أداء الموظفين</h3><span class="muted">سرعة الرد = الوقت من وصول العميل لأول تواصل</span></div>
+          <div class="table-wrap" style="border:none"><table><thead><tr><th>الموظف</th><th>العملاء</th><th>مفتوح</th><th>سرعة الرد</th><th>متأخر الآن</th><th>تم البيع</th><th>التحويل</th></tr></thead><tbody id="crReps"></tbody></table></div></div>
+        <div class="grid-2-eq">
+          <div class="card"><div class="card-head"><h3>جودة العملاء</h3></div><div class="hbar-list" id="crTiers"></div></div>
+          <div class="card"><div class="card-head"><h3>حسب الشهر</h3></div>
+            <div class="table-wrap" style="border:none"><table><thead><tr><th>الشهر</th><th>العملاء</th><th>مفتوح</th><th>مؤهل</th><th>بيع</th><th>مغلق</th><th>التحويل</th></tr></thead><tbody id="crMonths"></tbody></table></div></div>
+        </div>
+      </section>
+
+      <!-- ===== Users ===== -->
+      <section class="page" id="page-users">
+        <div class="page-head">
+          <div>
+            <h2>الموظفون والصلاحيات</h2>
+            <p>من يقدر يدخل النظام وماذا يستطيع أن يفعل</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-primary" data-action="add-user"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>إضافة موظف</button>
+          </div>
+        </div>
+        <div class="alert info">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <div><b>المدير:</b> كل الصلاحيات، بما فيها الحذف وإلغاء البيع والإعدادات وإدارة الموظفين.<br><b>موظف:</b> يضيف العملاء ويتابعهم ويغيّر مراحلهم ويسجل البيع — بدون حذف عملاء أو تعديل الإعدادات أو استيراد البيانات.<br>أي حساب جديد يُنشأ من خارج هذه الصفحة يبقى <b>موقوفًا</b> حتى يفعّله المدير.</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الموظف</th><th>البريد الإلكتروني</th><th>الصلاحية</th><th>الحالة</th><th>تاريخ الإضافة</th><th>مبيعاته</th><th></th></tr></thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== Settings ===== -->
+      <section class="page" id="page-settings">
+        <div class="page-head">
+          <div>
+            <h2>الإعدادات</h2>
+            <p>الفريق، قواعد التأهيل، قوالب الواتساب، والنسخ الاحتياطي</p>
+          </div>
+        </div>
+        <div class="alert info">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <div class="local-only"><b>الوضع المحلي:</b> البيانات محفوظة على هذا المتصفح فقط لأن قاعدة البيانات لم تُربط بعد (ملف <span class="mono">crm/config.js</span>). خذ نسخة احتياطية بشكل دوري.</div>
+          <div class="cloud-only"><b>متصل بقاعدة البيانات:</b> كل التغييرات تُحفظ فورًا وتظهر لكل الموظفين لحظيًا.</div>
+        </div>
+        <div class="settings-grid">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div class="card-head"><h3>بيانات عامة</h3></div>
+              <form id="settingsForm" class="form-grid cols-2">
+                <div class="field span-2"><label>اسم المنشأة</label><input class="input" name="companyName"></div>
+                <div class="field span-2 local-only"><label>اسمك (يظهر في سجل التواصل)</label><input class="input" name="currentUser"></div>
+                <div class="field span-2"><button class="btn btn-primary" type="submit">حفظ</button></div>
+              </form>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>قواعد العمل</h3></div>
+              <p class="muted" style="font-size:.86rem;margin-bottom:12px">حدود التأهيل (الراتب، الالتزامات)، هدف سرعة الرد، مصادر الإعلانات، أسباب الإغلاق، الأوراق المطلوبة، الموديلات، وقوالب الواتساب.</p>
+              <button class="btn btn-ghost" data-action="lead-settings">فتح إعدادات العملاء</button>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div class="card-head"><h3>فريق المبيعات (المندوبين)</h3></div>
+              <p class="muted cloud-only" style="font-size:.82rem;margin-bottom:10px">الموظفون المفعّلون يظهرون تلقائيًا. أضف هنا أسماء إضافية (مثل مندوبين سابقين في الملف المستورد).</p>
+              <div class="tag-list" id="sellerTags"></div>
+              <form class="inline-form" id="sellerForm"><input class="input" name="seller" placeholder="اسم المندوب" required><button class="btn btn-ghost" type="submit">إضافة</button></form>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>النسخ الاحتياطي والبيانات</h3></div>
+              <div class="page-actions">
+                <button class="btn btn-ghost" data-action="backup">تحميل نسخة احتياطية</button>
+                <label class="btn btn-ghost">استيراد نسخة<input type="file" id="importFile" accept=".json,application/json" hidden></label>
+                <button class="btn btn-ghost" data-action="demo">تحميل بيانات تجريبية</button>
+                <button class="btn btn-danger" data-action="wipe">مسح كل البيانات</button>
+              </div>
+              <p class="muted" style="font-size:0.8rem;margin-top:10px" id="storageInfo"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- Login -->
+<div class="auth-screen hidden" id="authScreen">
+  <div class="auth-card">
+    <div class="brand-logo auth-logo">ر</div>
+    <h1>رواد الاعتماد</h1>
+    <p class="muted">نظام إدارة العملاء — دخول الموظفين</p>
+    <div class="auth-state" id="authLoading"><div class="spinner"></div><p class="muted">جاري التحميل…</p></div>
+    <form class="auth-state hidden" id="loginForm" novalidate>
+      <div class="field"><label>البريد الإلكتروني</label><input class="input" type="email" name="email" dir="ltr" autocomplete="username" required></div>
+      <div class="field"><label>كلمة المرور</label><input class="input" type="password" name="password" dir="ltr" autocomplete="current-password" required></div>
+      <p class="auth-msg" id="loginMsg"></p>
+      <button class="btn btn-primary btn-block" type="submit">تسجيل الدخول</button>
+      <button class="link-btn" type="button" id="forgotBtn">نسيت كلمة المرور؟</button>
+    </form>
+    <div class="auth-state hidden" id="authInactive">
+      <div class="alert warn" style="text-align:right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div id="inactiveMsg">حسابك موقوف أو بانتظار تفعيل المدير. تواصل مع مدير النظام.</div></div>
+      <button class="btn btn-ghost btn-block" type="button" data-action="logout">تسجيل الخروج</button>
+    </div>
+    <div class="auth-state hidden" id="authError">
+      <div class="alert warn" style="text-align:right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><div id="authErrorMsg"></div></div>
+      <button class="btn btn-ghost btn-block" type="button" onclick="location.reload()">إعادة المحاولة</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal & drawer containers -->
+<div class="overlay" id="modalOverlay"><div class="modal" id="modal"></div></div>
+<div class="drag-bar" id="dragBar">
+  <div class="drop-zone won" data-drop="won"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>أفلت هنا: تم البيع</span></div>
+  <div class="drop-zone lost" data-drop="lost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg><span>أفلت هنا: إغلاق بدون بيع</span></div>
+</div>
+<div class="overlay drawer-overlay" id="leadOverlay"><div class="drawer" id="leadDrawer"></div></div>
+<div class="toasts" id="toasts"></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script src="core.js"></script>
+<script src="crm.js"></script>
+</body>
+</html>
