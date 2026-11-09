@@ -3,152 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>معرض رواد الاعتماد للسيارات</title>
+<meta name="robots" content="noindex, nofollow">
+<title>بوابة الموظفين | رواد الاعتماد</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+<style>
+  :root { --bg: #0d141c; --panel: #18232f; --border: #283849; --gold: #d4a437; --gold-light: #f0c563; --text: #eef2f6; --muted: #93a4b4; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Cairo', Tahoma, sans-serif; color: var(--text); min-height: 100vh;
+    background: radial-gradient(circle at 75% 15%, rgba(212,164,55,.13), transparent 50%), var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px;
+  }
+  .logo { width: 64px; height: 64px; border-radius: 16px; background: linear-gradient(135deg, var(--gold), #a87c1f); color: #111; font-weight: 800; font-size: 2rem; display: grid; place-items: center; margin-bottom: 14px; }
+  h1 { font-size: 1.6rem; font-weight: 800; }
+  .sub { color: var(--muted); margin: 4px 0 30px; text-align: center; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 16px; width: 100%; justify-content: center; }
+  a.card {
+    display: flex; flex-direction: column; gap: 10px; padding: 24px 22px; border-radius: 16px; text-decoration: none; color: inherit;
+    background: var(--panel); border: 1px solid var(--border); transition: border-color .15s, transform .15s;
+  }
+  a.card:hover { border-color: var(--gold); transform: translateY(-2px); }
+  .ic { width: 46px; height: 46px; border-radius: 12px; background: rgba(212,164,55,.14); color: var(--gold-light); display: grid; place-items: center; }
+  .ic svg { width: 24px; height: 24px; }
+  a.card b { font-size: 1.15rem; }
+  a.card span { color: var(--muted); font-size: .9rem; line-height: 1.7; }
+  a.card i { font-style: normal; color: var(--gold); font-weight: 700; font-size: .9rem; margin-top: 4px; }
+  .foot { margin-top: 34px; color: var(--muted); font-size: .88rem; text-align: center; }
+  .foot a { color: var(--gold); text-decoration: none; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+</style>
 </head>
 <body>
-
-<header class="navbar">
-  <div class="container navbar-inner">
-    <div class="logo">
-      <span class="logo-icon">🚗</span>
-      <span class="logo-text">معرض رواد الاعتماد</span>
-    </div>
-    <nav class="nav-links" id="navLinks">
-      <a href="#home">الرئيسية</a>
-      <a href="#cars">سياراتنا</a>
-      <a href="#calculator">حاسبة التمويل</a>
-      <a href="#contact">تواصل معنا</a>
-    </nav>
-    <button class="menu-toggle" id="menuToggle" aria-label="القائمة">☰</button>
+  <div class="logo">ر</div>
+  <h1>بوابة موظفي رواد الاعتماد</h1>
+  <p class="sub">الأنظمة الداخلية — للموظفين فقط</p>
+  <div class="grid">
+    <a class="card" href="crm/">
+      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <b>إدارة العملاء</b>
+      <span>متابعة العملاء من الإعلان حتى البيع: مهام اليوم، مراحل البيع، الحسبة، الأوراق، والتقارير.</span>
+      <i>دخول ←</i>
+    </a>
+    <a class="card" href="inventory/">
+      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M6 17l1.5-6h9L18 17M7.5 11 9 7h6l1.5 4"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg></div>
+      <b>إدارة المخزون</b>
+      <span>السيارات، المبيعات والفواتير، المصاريف، الموردون، وتقارير المخزون.</span>
+      <i>دخول ←</i>
+    </a>
   </div>
-</header>
-
-<section id="home" class="hero">
-  <div class="container hero-inner">
-    <h1>معرض رواد الاعتماد للسيارات</h1>
-    <p>وجهتك الأولى لاقتناء سيارتك المفضلة بأفضل الأسعار، مع خيارات تمويل مرنة تناسب راتبك</p>
-    <div class="hero-actions">
-      <a href="#calculator" class="btn btn-primary">احسب قسطك الشهري</a>
-      <a href="#cars" class="btn btn-outline">تصفح السيارات</a>
-    </div>
-  </div>
-</section>
-
-<section id="cars" class="section">
-  <div class="container">
-    <h2 class="section-title">سياراتنا المتوفرة</h2>
-    <p class="section-sub">مجموعة مختارة من أحدث الموديلات — اضغط "احسب القسط" لتقدير التمويل مباشرة</p>
-
-    <div class="cars-grid" id="carsGrid">
-      <!-- Car cards injected by JS -->
-    </div>
-  </div>
-</section>
-
-<section id="calculator" class="section calc-section">
-  <div class="container">
-    <h2 class="section-title">حاسبة التمويل</h2>
-    <p class="section-sub">أدخل بياناتك لمعرفة القسط الشهري التقريبي وقدرتك التمويلية</p>
-
-    <div class="calc-wrapper">
-      <form class="calc-form" id="calcForm">
-        <div class="form-grid">
-          <div class="field">
-            <label for="carPrice">سعر السيارة (ر.س)</label>
-            <input type="number" id="carPrice" min="0" step="500" placeholder="مثال: 90000" required>
-          </div>
-
-          <div class="field">
-            <label for="downPayment">الدفعة المقدمة (ر.س)</label>
-            <input type="number" id="downPayment" min="0" step="500" placeholder="مثال: 10000" value="0">
-          </div>
-
-          <div class="field">
-            <label for="salary">الراتب الشهري (ر.س)</label>
-            <input type="number" id="salary" min="0" step="100" placeholder="مثال: 8000" required>
-          </div>
-
-          <div class="field">
-            <label for="obligations">إجمالي الالتزامات الشهرية الحالية (ر.س)</label>
-            <input type="number" id="obligations" min="0" step="50" placeholder="أقساط أخرى، إن وجدت" value="0">
-          </div>
-
-          <div class="field">
-            <label for="months">مدة التمويل</label>
-            <select id="months">
-              <option value="12">12 شهر (سنة)</option>
-              <option value="24">24 شهر (سنتان)</option>
-              <option value="36" selected>36 شهر (3 سنوات)</option>
-              <option value="48">48 شهر (4 سنوات)</option>
-              <option value="60">60 شهر (5 سنوات)</option>
-              <option value="72">72 شهر (6 سنوات)</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="rate">نسبة الربح السنوية (%)</label>
-            <input type="number" id="rate" min="0" step="0.1" value="4.5">
-          </div>
-
-          <div class="field">
-            <label for="balloon">نسبة الدفعة الختامية من سعر السيارة (%)</label>
-            <input type="number" id="balloon" min="0" max="60" step="1" value="0" placeholder="اختياري، مثال: 30">
-          </div>
-        </div>
-        <p class="field-hint">الدفعة الختامية (Balloon Payment) مبلغ كبير يُسدد دفعة واحدة في نهاية مدة التمويل، ويقلل القسط الشهري خلال المدة. اتركها صفر إذا كنت لا تريدها.</p>
-
-        <button type="submit" class="btn btn-primary btn-block">احسب القسط الشهري</button>
-        <p class="disclaimer">* هذه حاسبة تقديرية لأغراض التوضيح فقط، ولا تُعد عرض تمويل رسمي. القسط النهائي يخضع لموافقة جهة التمويل.</p>
-      </form>
-
-      <div class="calc-result" id="calcResult">
-        <div class="result-placeholder">
-          <span class="result-icon">🧮</span>
-          <p>املأ البيانات واضغط "احسب القسط الشهري" لعرض النتيجة هنا</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="contact" class="section contact-section">
-  <div class="container">
-    <h2 class="section-title">تواصل معنا</h2>
-    <p class="section-sub">فريقنا جاهز لمساعدتك في اختيار السيارة المناسبة وترتيب التمويل</p>
-    <div class="contact-grid">
-      <div class="contact-card">
-        <span class="contact-icon">📍</span>
-        <h3>الموقع</h3>
-        <p>المملكة العربية السعودية</p>
-      </div>
-      <div class="contact-card">
-        <span class="contact-icon">📞</span>
-        <h3>الهاتف</h3>
-        <p dir="ltr">920-000-000</p>
-      </div>
-      <div class="contact-card">
-        <span class="contact-icon">✉️</span>
-        <h3>البريد الإلكتروني</h3>
-        <p dir="ltr">info@rowaad-cars.example</p>
-      </div>
-      <div class="contact-card">
-        <span class="contact-icon">🕐</span>
-        <h3>ساعات العمل</h3>
-        <p>يوميًا من 9 صباحًا حتى 10 مساءً</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<footer class="footer">
-  <div class="container">
-    <p>© 2026 معرض رواد الاعتماد للسيارات. جميع الحقوق محفوظة. · <a href="inventory/" style="color:var(--gold)">دخول الموظفين — إدارة المخزون</a> · <a href="crm/" style="color:var(--gold)">إدارة العملاء</a></p>
-  </div>
-</footer>
-
-<script src="js/script.js"></script>
+  <p class="foot">موقع المعرض الرسمي: <a href="https://ruwwadaletemad.com/">ruwwadaletemad.com</a></p>
 </body>
 </html>
