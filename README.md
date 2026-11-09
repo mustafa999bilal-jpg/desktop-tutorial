@@ -1,5 +1,15 @@
 # معرض رواد الاعتماد للسيارات
 
+> **الموقع الرسمي للمعرض:** https://ruwwadaletemad.com/
+> هذا المستودع يستضيف **بوابة الموظفين** فقط (`index.html`) وتحتها نظام إدارة العملاء (`crm/`) ونظام إدارة المخزون (`inventory/`). الصفحات مخفية عن محركات البحث.
+
+### ربط البوابة بدومين المعرض (staff.ruwwadaletemad.com)
+1. عند الجهة المسجّل عندها الدومين (إدارة DNS)، أضف سجلًا جديدًا:
+   - النوع: **CNAME** — الاسم/Host: **staff** — القيمة/Target: **mustafa999bilal-jpg.github.io** — TTL: الافتراضي.
+2. في GitHub: المستودع ← **Settings** ← **Pages** ← **Custom domain** اكتب `staff.ruwwadaletemad.com` واضغط **Save**، ثم بعد تفعيل الشهادة علّم على **Enforce HTTPS** (قد يأخذ من دقائق لساعات).
+3. بعدها تصبح الروابط: `https://staff.ruwwadaletemad.com/crm/` و `https://staff.ruwwadaletemad.com/inventory/`، والروابط القديمة على github.io تتحول لها تلقائيًا.
+4. حدّث **Site URL** و **Redirect URLs** في مشاريع Supabase للروابط الجديدة.
+
 - `index.html` — موقع المعرض مع حاسبة التمويل.
 - `inventory/` — **نظام إدارة المخزون** (لوحة تحكم داخلية للموظفين).
 - `crm/` — **نظام إدارة العملاء** (مستقل تمامًا عن المخزون: رابط، دخول، وقاعدة بيانات منفصلة).
